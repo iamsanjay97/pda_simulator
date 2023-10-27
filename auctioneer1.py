@@ -73,7 +73,6 @@ class AuctionEnv(ParallelEnv):
         
         actions_li = {k : v.tolist() for k, v in actions.items()}
         
-        # print(actions_li)
         # Seperate bids from agent and have a mapping of player to bids
         bid_vals = []
         bid_player_map = []
@@ -82,8 +81,6 @@ class AuctionEnv(ParallelEnv):
             for val in actions_li[key]:
                 bid_vals.append(val)
                 bid_player_map.append(key)
-        # self.bid_vals = bid_vals
-        # print('here',bid_vals)
         
         bid_val_ind = sorted(range(len(bid_vals)), key=lambda k: (-bid_vals[k][0],-bid_vals[k][1]))
     
@@ -108,28 +105,17 @@ class AuctionEnv(ParallelEnv):
         for k,v in uni_bids.items():
             uni_bids_comb.append([k,sum(v)])
 
-        # Then use the clearing mechanism for unique prices
-
-        # copies need or not???
-        # _asks = asks.copy()
-        # _bids = uni_bids_comb.copy()
         # copy the ask and bid quantities
         cleared_asks_quant = [ask[1] for ask in self.asks]
         cleared_bids_quant = [bid[1] for bid in uni_bids_comb]
 
-        # iterators and variables
         i = self.last_cl_ask_index
         j = 0
         N_a = len(self.asks)
         N_b = len(uni_bids_comb)
-        # print(i,"i")
-        # print("N_a = ",N_a,"N_b =" ,N_b )
 
         last_ask_index = self.last_cl_ask_index
         last_bid_index = N_b
-        # print(last_ask_index,"last_ask_index   1")
-
-        # print(uni_bids_comb,"bids")
         
         while j < N_b and i < N_a:
             if self.asks[i][0] > (uni_bids_comb[j][0]):
@@ -139,31 +125,20 @@ class AuctionEnv(ParallelEnv):
             uni_bids_comb[j][1] -= match_quant 
             last_ask_index, last_bid_index = i, j
             
-        
-            
             # Check if the quantity of particular ask is satisfied, 
             # if yes then go to next ask
             if self.asks[i][1] == 0:
                 i += 1 
-
 
             # Check if the quantity of particular bid is satisfied, 
             # if yes then go to next bid
             if uni_bids_comb[j][1] == 0:
                 j += 1
             
-        # print(self.asks[:,1])
-        # print(uni_bids_comb)
-        # print(uni_bids_comb)
-
         cleared_asks_quant = cleared_asks_quant - self.asks[:,1]
 
-        # print(cleared_asks_quant,"cleared ask quantity")
-        # print(self.last_cl_ask_index,"cleared ask index")
         uni_bids_comb_column = [u[1] for u in uni_bids_comb]
         cleared_bids_quant = np.array(cleared_bids_quant) - np.array(uni_bids_comb_column)
-
-
 
         #Total cleared quantity
         mcq = sum(cleared_asks_quant) 
@@ -176,28 +151,22 @@ class AuctionEnv(ParallelEnv):
         else:
             self.mcp = (self.asks[last_ask_index][0]+uni_bids_comb[last_bid_index][0])/2 
 
-        # print(last_ask_index,"last_ask_index   2")
-        # Distribute the cleared quantitites among bids of same price (if any)
-
         cleared_bids = []
         prices = list(uni_bids.keys()) ## ERROR ALMOST SAME NAME NEED TO CHANGE
 
-        # print(prices)
         for i in range(len(prices)):
         # Assumes that quantities are in descending order for the same price
             if cleared_bids_quant[i] == 0: # Price not cleared
                 for _ in uni_bids[prices[i]]:
-                    cleared_bids.append([prices[i],0])
-                
+                    cleared_bids.append([prices[i],0])                
             elif sum(uni_bids[prices[i]]) == cleared_bids_quant[i]: # Fully cleared
                 for v in uni_bids[prices[i]]:
                     cleared_bids.append([prices[i],v])
             else: # Partially cleared; So need to distribute among equal price bids
                 count = Counter(uni_bids[prices[i]])
                 comb_quant = sorted(count.items(), key=lambda pair: pair[0], reverse=True)
-        #         print(prices[i],comb_quant)
-
                 clear_quant_price = cleared_bids_quant[i]
+
                 for j in range(len(comb_quant)):
                     
                     if clear_quant_price == 0: 
@@ -213,15 +182,12 @@ class AuctionEnv(ParallelEnv):
                         # Partially cleared and Equally distributed
                         each_cleared_quant = clear_quant_price/comb_quant[j][1] # round() is removed
                         
-        #                 # To make sure the quantitity is not more than existing after rounding
-        #                 if comb_quant[j][1] * each_cleared_quant > clear_quant_price:
-        #                     each_cleared_quant = round(( - 1/100),2)
-                        
                         for _ in range(comb_quant[j][1]):
                             cleared_bids.append([prices[i],each_cleared_quant])
                         #clear_quant_price -= comb_quant[j][0] * comb_quant[j][1] # might lead to numerical instability
                         # Hence set
                         clear_quant_price = 0
+
         # Calculate rewards or costs
         rewards = {}
         cleared_quant_agent = {}
@@ -236,28 +202,6 @@ class AuctionEnv(ParallelEnv):
         rewards = {k: v for k, v in sorted(list(rewards.items()))} # See better way to do this
         cleared_quant_agent = {k: v for k, v in sorted(list(cleared_quant_agent.items()))}
 
-        # Change the index of the asks
-
-
-        # print(last_ask_index,"last_ask_index   3")   
-        
-        # print(self.asks[last_ask_index][1],"cleared quantity")
-        # print(last_ask_index,"last ask index")
-        # print(N_a,"asks no")
-        # print(self.asks[last_ask_index][1] == 0)
-        # print(self.asks[last_ask_index][1] == 0.0)
-
-        # ## Make the ask price to zero for the fully cleared ask
-
-        # print(self.last_cl_ask_index,"prev last cl ind")
-        # print(last_ask_index,"pres last cl ind")
-        # print(self.asks,"asks")
-        # for inx in range(self.last_cl_ask_index,last_ask_index+1):
-        #     if self.asks[inx][1] == 0:
-        #         self.asks[inx][0] = 0 
-
-
-        # print(self.asks, "asks")
         if last_ask_index > -1 and last_ask_index < N_a:
             if self.asks[last_ask_index][1] == 0.0:
                 self.last_cl_ask_index = last_ask_index + 1
@@ -265,25 +209,10 @@ class AuctionEnv(ParallelEnv):
             else:
                 self.last_cl_ask_index = last_ask_index
 
-
-        # print(self.last_cl_ask_index,"cleared ask index later")
-        
-       
-        # Update requirements
-        # print("requirements before",self.requirements)
         for i in self.agents:
             self.requirements[i] = max(0.0,self.requirements[i]-cleared_quant_agent[i])
         
-        # print("requirements",self.requirements)
-        # print("cleared quantities",cleared_quant_agent)
-
-        # print("cleared quant", cleared_quant_agent[i])
-        # print("requirements",self.requirements)
-        # print("timestep",self.timestep)
         return rewards
-
-    
-
 
 
     def reset(self, seed=None, options=None):
