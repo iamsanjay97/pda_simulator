@@ -1,0 +1,7 @@
+README.md
+setup.py
+pdauction.egg-info/PKG-INFO
+pdauction.egg-info/SOURCES.txt
+pdauction.egg-info/dependency_links.txt
+pdauction.egg-info/requires.txt
+pdauction.egg-info/top_level.txt

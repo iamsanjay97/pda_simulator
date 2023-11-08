@@ -1,0 +1,7 @@
+README.md
+setup.py
+broker.egg-info/PKG-INFO
+broker.egg-info/SOURCES.txt
+broker.egg-info/dependency_links.txt
+broker.egg-info/requires.txt
+broker.egg-info/top_level.txt

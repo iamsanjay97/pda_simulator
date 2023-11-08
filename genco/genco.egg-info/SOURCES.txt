@@ -1,0 +1,7 @@
+README.md
+setup.py
+genco.egg-info/PKG-INFO
+genco.egg-info/SOURCES.txt
+genco.egg-info/dependency_links.txt
+genco.egg-info/requires.txt
+genco.egg-info/top_level.txt

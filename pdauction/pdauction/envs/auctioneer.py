@@ -1,131 +1,105 @@
+import sys
 import gym
-from gym import spaces
-import pygame
 import numpy as np
-import functools
+import pandas as pd
 
+from gym import spaces
+from collections import OrderedDict
+from matplotlib import pyplot as plt
+
+import warnings
+warnings.filterwarnings('ignore')
+
+# sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator/pdauction/pdauction/envs')
+from config import Config
+
+config = Config()
 
 class AuctioneerEnv(gym.Env):
-    metadata = {"render_modes": ["human"], "name": "Auctioneer-v0"}
+    metadata = {"render_modes": ["human"], "render_fps": 4, "name": "Auctioneer-v0"}
 
-    def __init__(self, number_of_agents, render_mode=None):
+    def __init__(self, render_mode=None):
 
-        self.default_margin = 0.05                # used when one side has no limit price
-        self.default_clearing_price = 40.00       # used when no limit prices
-        self.seller_surplus_ratio = 0.5
-        self.seller_max_margin = 0.05
-        self.mkt_posn_limit_initial = 90.0
-        self.mkt_posn_limit_final = 143.0
-
-        self.number_of_agents = number_of_agents
-        self.horizon = 24                         # finite horizon of 24 hours
-
-        self.number_of_bids = 1
-        self.max_bid_price = 500
-        self.min_bid_price = 0.5
-        self.min_bid_qty = 0.01                   # in MwH
-        self.max_bid_qty = 100                    # in MwH
-
+        self.observation_space = spaces.Box(0, 1, shape=(2,), dtype=float)
+        self.action_space = spaces.Discrete(4)
         self.render_mode = render_mode
 
 
-    def clearing_mechanism(self, actions):
-        '''
-            A funtion to perform the market clearing
-        '''
-
-
-    def reset(self, seed=None, options=None):
-        '''
-            A fuction to reset the environment
-        '''
-        self.agents = copy(self.possible_agents)
-        # self.max_num_agents = len(self.agents)
-        self.timestep = 0
+    def plot(self, asks_df, bids_df):
+        ask_prices = list(asks_df['Price'])
+        ask_quantities = list(asks_df['Quantity'])
         
-        self.requirements = np.round(np.random.uniform(self.min_req_quantity,self.max_req_quantity,size=(self.num_of_agents,)),2)
+        ask_prices.insert(0, ask_prices[0])
+        ask_quantities.insert(0, 0)
+        ask_cum_quantities = np.cumsum(ask_quantities)
         
-        # self.requirements = np.array([1500.0])
-        self.supply_curve = NCpGenco()
-        self.asks = self.supply_curve.asks()
-        self.last_cl_ask_index = 0
-        self.no_of_asks = len(self.asks)
-        self.max_ask_price = self.asks[self.no_of_asks-1,0]
-        self.min_ask_price = self.asks[0,0]
-        self.max_ask_qty = self.asks[0,1]
-        self.min_ask_qty = self.supply_curve.min_ask_quant
-
-        # No information initially for partial information game <---- To Do later
-
-        # For complete information game can share requirements of all players 
-
-        observation = {"ask_price" : self.asks[:,0] , "ask_qty": self.asks[:,1],"reqs" : self.requirements}
-        observations = { i: observation for i in self.agents }
-        return observations, {}
-
-
-    def step(self, action):
-        # actions are nothing but bids with keys as player id 
-        if self.timestep < self.horizon:
-            rewards = self._clearing_mechanism(actions)
-        else:
-            rewards = {i : self.balancing_price * self.requirements[i]  for i in self.agents}
+        bid_prices = list(bids_df['Price'])
+        bid_quantities = list(bids_df['Quantity'])
         
-        # print(self.timestep)
-        # Check termination conditions
-        observation = {"ask_price" : self.asks[:,0] , "ask_qty": self.asks[:,1],"reqs" : self.requirements}
-        observations = { i: observation for i in self.agents }
-        truncations = {i : False for i in self.agents}
-        infos = {i:{} for i in self.agents}
-        terminations = {i: False for i in self.agents}
-        # print(terminations)
+        bid_prices.insert(0, bid_prices[0])
+        bid_quantities.insert(0, 0)
+        bid_cum_quantities = np.cumsum(bid_quantities)
+                
+        plt.step(np.negative(ask_cum_quantities), ask_prices, where='pre')
+        plt.step(bid_cum_quantities, np.negative(bid_prices), where='pre')
+        plt.show()
+
+
+    def clearing_mechanism(self, asks_df, bids_df):
+       
+        total_mwh = 0.0
+        mcp = 40.0                                    # default macp when both ask and bid are market order                      
+        cleared_asks = list()
+        cleared_bids = list()
+
+        i = 0
+
+        while (not asks_df.empty and not bids_df.empty and (-bids_df[:1].values[0][1] > asks_df[:1].values[0][1])):
+            i += 1
+
+            bid = bids_df[:1].values[0]               # a single bid in the form of ['ID', 'Price', 'Quantity']
+            ask = asks_df[:1].values[0]               # a single ask in the form of ['ID', 'Price', 'Quantity']
+
+            transfer = min(bid[2], -ask[2])           # index 2 is for Quantity
+
+            total_mwh += transfer
+            if (-bid[1] != config.market_order_bid_price):
+                if (ask[1] != config.market_order_ask_price):
+                    mcp = ask[1] + config.k*(-bid[1] - ask[1])
+                else:
+                    mcp = -bid[1] / (1.0 + config.default_margin)
+            else:
+                if (ask[1] != 0):
+                    mcp = ask[1] * (1.0 + config.default_margin)
+
+
+            if (transfer == bid[2]):                   # bid is fully cleared 
+                asks_df['Quantity'][:1] = asks_df['Quantity'][:1] + transfer   # ask quantity is negative
+                ask[2] = -transfer
+                cleared_asks.append(ask)
+                cleared_bids.append(bid)
+                bids_df = bids_df[1:]
+            else:                                     # ask is fully cleared  
+                bids_df['Quantity'][:1] = bids_df['Quantity'][:1] - transfer
+                bid[2] = transfer
+                cleared_bids.append(bid)
+                cleared_asks.append(ask)
+                asks_df = asks_df[1:]
+
+        cleared_asks_df = pd.DataFrame(cleared_asks, columns=['ID', 'Price', 'Quantity'])
+        cleared_bids_df = pd.DataFrame(cleared_bids, columns=['ID', 'Price', 'Quantity'])
         
+        return mcp, total_mwh, cleared_asks_df, cleared_bids_df
 
-        # if self.timestep >= self.horizon-1:
-        #     terminations = {i: True for i in range(self.num_agents)}
-        #     self.agents = []
 
-        for i in self.possible_agents:
-            # print("env:agent",i)
-            # print("env:requirements",self.requirements)
-            if i in self.agents:
-                if self.requirements[i] == 0.0 or self.timestep == self.horizon:
-                    # print("inside")
-                    terminations[i] = True
-                    self.agents.remove(i)
-                    # print("env:agents",self.agents)
-                    # print("env:terminations",terminations)
-                # self.requirements = np.delete(self.requirements,i)
-        # print(terminations)
-        # print("-----------------------")
-        # print("self.agents",self.agents)
+    def reset(self):
+        pass
 
-        self.timestep += 1
-
-        return observations, rewards, terminations, truncations, infos
-
+    def step(self):
+        pass
 
     def render(self):
         pass
 
-
     def close(self):
         pass
-
-
-    @functools.lru_cache(maxsize=None)
-    def observation_space(self, agent):
-        ask_price = Box(self.min_ask_price,self.max_ask_price,shape=(self.no_of_asks,),dtype=np.float32)
-        ask_qty = Box(self.min_ask_qty,self.max_ask_qty,shape=(self.no_of_asks,),dtype=np.float32)
-        # ask_space = Tuple((ask_price,ask_qty))
-        qty_reqs = Box(self.min_req_quantity,self.max_req_quantity,shape=(self.num_agents,),dtype=np.float32) 
-    
-        return Dict({"ask_price" : ask_price , "ask_qty": ask_qty,"reqs" : qty_reqs})
-         
-
-    @functools.lru_cache(maxsize=None)
-    def action_space(self, agent):
-        # bid_price = Box(self.min_bid_price,self.max_bid_price,shape=(),dtype=np.float32)
-        # bid_qty = Box(self.min_bid_qty,self.max_req_quantity,shape=(),dtype=np.float32)
-        action_space = Box(low=np.tile(np.array([self.min_bid_price, self.min_bid_qty]),(self.no_of_bids,1)), high=np.tile(np.array([self.max_bid_price, self.max_bid_qty]),(self.no_of_bids,1)), dtype=np.float32)
-        return action_space
