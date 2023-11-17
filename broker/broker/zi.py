@@ -20,6 +20,7 @@ class ZI(gym.Env):
         self.observation_space = spaces.Box(0, 1, shape=(2,), dtype=float)
         self.action_space = spaces.Discrete(4)
         self.render_mode = render_mode
+        self.type = "ZI"
 
     def set(self, total_demand, number_of_bids, buy_limit_price_min=-100.0, buy_limit_price_max=-1.0, sell_limit_price_min=0.5, sell_limit_price_max=100.0, id='ZI'):
         self.id = id

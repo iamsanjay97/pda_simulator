@@ -31,6 +31,7 @@ class MCTS_Disc(gym.Env):
         self.observation_space = spaces.Box(0, 1, shape=(2,), dtype=float)
         self.action_space = spaces.Discrete(4)
         self.render_mode = render_mode
+        self.type = "Discrete MCTS"
 
     def set(self, total_demand, number_of_bids=1, buy_limit_price_min=-100.0, buy_limit_price_max=-1.0, sell_limit_price_min=0.5, sell_limit_price_max=100.0, id='MCTS'):
         self.id = id
@@ -56,6 +57,15 @@ class MCTS_Disc(gym.Env):
 
     def get_action_set(self):
         return self.action
+    
+    def set_supply(self, seller_quantities):
+        self.supply = seller_quantities
+
+    def set_demand(self, player_quantities):
+        self.demand = player_quantities
+    
+    def set_quantities(self, player_total_demand):
+        self.quantities = player_total_demand
 
     def bids(self, timeslot, current_timeslot, random=False):
 
@@ -64,10 +74,10 @@ class MCTS_Disc(gym.Env):
         if rem_quantity < self.min_bid_quant:
             return None
         
-        remaining_tries = timeslot - current_timeslot
+        proximity = timeslot - current_timeslot                         # Proximity runs from 24 to 1 for a day-ahead PDA
 
         self.observer.current_timeslot = current_timeslot
-        self.observer.hour_ahead = remaining_tries
+        self.observer.hour_ahead = proximity
         self.observer.needed_enery_per_broker = rem_quantity
         self.observer.initial_needed_enery_mcts_broker = rem_quantity
 
@@ -76,29 +86,29 @@ class MCTS_Disc(gym.Env):
         root.hour_ahead_auction = self.observer.hour_ahead
         
         bids = list()
-        if remaining_tries > 0:
+        if rem_quantity > 0.0:
+            if not random:
+                for i in range(self.number_of_rollouts): 
+                    root.run_mcts(mcts.get_action_set(), mcts, self.observer)
 
-            if rem_quantity > 0.0:
-
-                if not random:
-                    for i in range(self.number_of_rollouts): 
-                        root.run_mcts(mcts.get_action_set(), mcts, self.observer)
-
-                    best_move = root.final_select(self.observer)
-                else:
-                    best_move = root.select_random(mcts)
-
-                # print("\nBest Move: ", best_move.to_string())
-
-                if(best_move != None):
-                    limit_price_range = [0, 100]    # TO DO: some way of getting this?
-                    limit_price = best_move.limit_price_fractions[0]*limit_price_range[0] + best_move.limit_price_fractions[1]*limit_price_range[1]
-                    quantity = best_move.quantity_ratio*rem_quantity
-                    bids.append([self.id, limit_price, quantity])
+                best_move = root.final_select(self.observer)
+                print("\nBest Move: ", best_move.to_string())
             else:
-                bids.append([self.id, config.market_order_bid_price, rem_quantity])
+                if(root.is_leaf()):
+                    print('root.isLeaf() is 0! This should not happen!')
+
+                if len(root.children) == 0:
+                        root.expand(mcts)
+
+                best_move = root.select_random(mcts)
+
+            if(best_move != None):
+                limit_price_range = [10, 100]    # TO DO: some way of getting this?
+                limit_price = -(best_move.limit_price_fractions[0]*limit_price_range[0] + best_move.limit_price_fractions[1]*limit_price_range[1])
+                quantity = best_move.quantity_ratio*rem_quantity
+                bids.append([self.id, limit_price, quantity])
         else:
-            bids.append([self.id, -config.market_order_bid_price, rem_quantity])
+            bids.append([self.id, config.market_order_bid_price, rem_quantity])
 
         return bids
     
@@ -114,8 +124,7 @@ class Observer:
     def __init__(self):
         self.current_timeslot = 0
         self.hour_ahead = 0
-        self.initial_needed_enery_mcts_broker = 0
-        self.needed_enery_per_broker = self.initial_needed_enery_mcts_broker
+        self.needed_enery_per_broker = 0
         self.balacing_price = 90.0
 
 
@@ -208,7 +217,6 @@ class TreeNode:
 
     def run_mcts(self, action, mcts, ob):
         needed_energy = ob.needed_enery_per_broker
-        ini_needed_energy = ob.initial_needed_enery_mcts_broker
         visited = list()
 
         cur = self
@@ -218,7 +226,6 @@ class TreeNode:
             print('cur.isLeaf() is 0! This should not happen!')
 
         avg_mcp = 0.0
-        count_clearing = 0
         
         while (cur.is_leaf() == False) and (needed_energy != 0):
             if len(cur.children) == 0:
@@ -233,13 +240,17 @@ class TreeNode:
                 cur = cur.select(mcts, ob, balancing_price)                     # UCT based selection
             visited.append(cur)
 
+        for iter in reversed(visited):
+            print(iter.to_string())
+        
         print('\nStarting the Simulation ...')
-        sim_cost = self.simulation(cur, ob, needed_energy, ini_needed_energy)
+        sim_cost = self.simulation(cur, ob, needed_energy, mcts.supply, mcts.demand, mcts.quantities)
         print('\nSimulation Done ! \nSimulation Cost: ', sim_cost)
 
         for iter in reversed(visited):
-            sim_cost += iter.current_node_cost   # TO DO: see if i'm double counting for the last node?
+            # sim_cost += iter.current_node_cost   # TO DO: see if i'm double counting for the last node?
             iter.update_stats(sim_cost)
+            print(iter.to_string())
             
 
     def select_random(self, mcts):
@@ -307,21 +318,19 @@ class TreeNode:
         return selected
 
 
-    def simulation(self, tn, ob, needed_mwh, ini_needed_energy):
-        bids = list()
+    def simulation(self, tn, ob, needed_mwh, supply, demand, quantities):
+        # bids = list()
         auction_proximity = self.hour_ahead_auction
 
-        # prepare own bids
-        limit_price_range = [0, 100]    # TO DO: some way of getting this?
-        limit_price = tn.limit_price_fractions[0]*limit_price_range[0] + tn.limit_price_fractions[1]*limit_price_range[1]
-        quantity = tn.quantity_ratio*needed_mwh
-
-        if(quantity > self.min_mwh):
-            bids.append([self.id, limit_price, quantity])
-        
         # prepare genco's asks and opponents' bids (in loop for multiple opponents)
-        name_of_sellers = ['cp_genco']
-        name_of_buyers = ['ZI', 'MCTS_D']
+        name_of_sellers = list()
+        name_of_buyers = list()
+
+        for item in supply.keys():
+            name_of_sellers.append(item)
+
+        for item in demand.keys():
+            name_of_buyers.append(item)
 
         list_of_sellers = dict()
         list_of_buyers = dict()
@@ -331,19 +340,22 @@ class TreeNode:
 
         for seller in name_of_sellers:
             seller_obj = gym.make('genco/CPGenCo-v0')
-            seller_obj.set_id('cp_genco')
+            seller_obj.set_id(seller)
+            seller_obj.set_cleared_quantity(supply[seller])
             list_of_sellers.update({seller: seller_obj})
             
-        buyer1 = gym.make('ZI-v0')
-        buyer1.set(config.market_demand*0.7, 1, id=name_of_buyers[0])
-        buyer2 = gym.make('MCTS_Disc-v0')
-        buyer2.set(config.market_demand*0.3, 1, id=name_of_buyers[1])
+        buyer1 = gym.make('MCTS_Disc-v0')
+        buyer1.set(quantities[name_of_buyers[0]], 1, id=name_of_buyers[0])
+        buyer1.set_cleared_demand(demand[name_of_buyers[0]])
+        buyer2 = gym.make('ZI-v0')
+        buyer2.set(quantities[name_of_buyers[1]], 1, id=name_of_buyers[1])
+        buyer2.set_cleared_demand(demand[name_of_buyers[1]])
 
         list_of_buyers.update({name_of_buyers[0]: buyer1})
         list_of_buyers.update({name_of_buyers[1]: buyer2})
 
-        rounds = auction_proximity
-        cur_round = 0
+        rounds = config.HOUR_AHEAD_AUCTIONS
+        cur_round = rounds - auction_proximity
         total_cost = 0.0
         avg_mcp = 0
         count = 0
@@ -363,14 +375,17 @@ class TreeNode:
                 bids_df = pd.DataFrame(columns=['ID', 'Price', 'Quantity'])
                 
             for buyer in list_of_buyers.keys():
-                buyer_df = pd.DataFrame(list_of_buyers[buyer].bids(rounds, cur_round+1, random=True), columns=['ID', 'Price', 'Quantity'])
+                buyer_df = pd.DataFrame(list_of_buyers[buyer].bids(rounds, cur_round, random=True), columns=['ID', 'Price', 'Quantity'])
                 bids_df = pd.concat([bids_df,buyer_df], ignore_index=True)
 
+            # bids_df = pd.concat([bids_df,own_df], ignore_index=True)
             bids_df = bids_df.sort_values(by=['Price'])
+            # print(bids_df)
                         
             # market clearing
             mcp, mcq, cleared_asks_df, cleared_bids_df = pda.clearing_mechanism(asks_df, bids_df)
-            
+            mcts_cleared_quantity = 0
+
             # update the cleared quantity of sellers
             for seller in list_of_sellers.keys():
                 temp = cleared_asks_df.groupby('ID')
@@ -386,14 +401,15 @@ class TreeNode:
                     list_of_buyers[buyer].set_cleared_demand(buyer_cq)
                     list_of_buyers[buyer].set_last_mcp(mcp)
 
-                    if buyer == "MCTS_D":                   # TO DO: add a type information into buyer
+                    if buyer == name_of_buyers[0]:                   # TO DO: add a type information into buyer
                         mcts_cleared_quantity = buyer_cq
                         mcts_total_cleared_quantity += mcts_cleared_quantity
             
-            print('\n----------During Rollout: At Proxomity ', proximity, '------\n')
+            # print('\n----------During Rollout: At Proxomity ', proximity, '------\n')
             if mcq != 0:
-                print('CP', mcp)
-                print('CQ', mcts_cleared_quantity)
+            #     print('MCP', mcp)
+            #     print('CQ', mcts_cleared_quantity)
+            #     print('MCQ', mcq)
 
                 total_cost += mcp*mcts_cleared_quantity
                 avg_mcp = (avg_mcp*count + mcp) / (count+1)
@@ -405,9 +421,9 @@ class TreeNode:
 
         b_price = 150.0 if (avg_mcp == 0.0) else 3*avg_mcp                      #  3 times the avg clearing price
         balancing_sim_sost = abs(rem_energy) * b_price
-        print("Remaining: ", rem_energy, " :: Balacing: ", balancing_sim_sost)
+        # print("Remaining: ", rem_energy, " :: Balacing: ", balancing_sim_sost)
         total_cost += balancing_sim_sost
-        tn.current_node_cost = -total_cost
+        # tn.current_node_cost = -total_cost
 
         return total_cost
 

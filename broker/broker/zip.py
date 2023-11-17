@@ -35,6 +35,7 @@ class ZIP(gym.Env):
         self.observation_space = spaces.Box(0, 1, shape=(2,), dtype=float)
         self.action_space = gym.Space.Discrete(4)
         self.render_mode = render_mode
+        self.type = "ZIP"
 
     def set(self, total_demand, number_of_bids=1, buy_limit_price_min=-100.0, buy_limit_price_max=-1.0, sell_limit_price_min=0.5, sell_limit_price_max=100.0, id='ZIP'):
         self.id = id

@@ -12,4 +12,4 @@ class Config:
         self.market_order_ask_price = 0
         self.DEFAULT_MCP = 40
         self.HOUR_AHEAD_AUCTIONS = 24
-        self.NUMBER_OF_ROLLOUTS = 5
+        self.NUMBER_OF_ROLLOUTS = 1
