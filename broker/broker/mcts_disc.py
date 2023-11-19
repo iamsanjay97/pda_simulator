@@ -1,3 +1,4 @@
+import copy
 import sys  
 import math
 import numpy as np
@@ -45,8 +46,9 @@ class MCTS_Disc(gym.Env):
         self.sell_limit_price_max = sell_limit_price_max
         self.last_mcp = config.DEFAULT_MCP
         self.number_of_rollouts = config.NUMBER_OF_ROLLOUTS
+        self.balancing_price = 90.0
+        self.initial_needed_energy = 0.0 
 
-        self.observer = Observer()
         self.action = Action()
 
     def set_cleared_demand(self, cleared_demand):
@@ -76,28 +78,21 @@ class MCTS_Disc(gym.Env):
         
         proximity = timeslot - current_timeslot                         # Proximity runs from 24 to 1 for a day-ahead PDA
 
-        self.observer.current_timeslot = current_timeslot
-        self.observer.hour_ahead = proximity
-        self.observer.needed_enery_per_broker = rem_quantity
-        self.observer.initial_needed_enery_mcts_broker = rem_quantity
-
         mcts = self
         root = TreeNode()
-        root.hour_ahead_auction = self.observer.hour_ahead
+        root.hour_ahead_auction = proximity
         
         bids = list()
         if rem_quantity > 0.0:
             if not random:
                 for i in range(self.number_of_rollouts): 
-                    root.run_mcts(mcts.get_action_set(), mcts, self.observer)
+                    root.run_mcts(mcts, rem_quantity)
 
-                best_move = root.final_select(self.observer)
+                best_move = root.final_select()
                 print("\nBest Move: ", best_move.to_string())
             else:
                 if(root.is_leaf()):
-                    print('root.isLeaf() is 0! This should not happen!')
-
-                if len(root.children) == 0:
+                    if len(root.children) == 0 and root.hour_ahead_auction != 0:
                         root.expand(mcts)
 
                 best_move = root.select_random(mcts)
@@ -117,15 +112,6 @@ class MCTS_Disc(gym.Env):
 
     def step(self):
         pass
-    
-
-class Observer:
-
-    def __init__(self):
-        self.current_timeslot = 0
-        self.hour_ahead = 0
-        self.needed_enery_per_broker = 0
-        self.balacing_price = 90.0
 
 
 class Action:
@@ -205,52 +191,50 @@ class TreeNode:
             self.quantity_ratio = node.quantity_ratio
 
     
-    def unvisited_children(self, tn):
+    def unvisited_children(self):
         count = 0
 
-        for i in tn.children:
-            if tn.children.get(i).n_visits == 0:
+        for i in self.children:
+            if self.children.get(i).n_visits == 0:
                 count += 1
 
         return count
     
 
-    def run_mcts(self, action, mcts, ob):
-        needed_energy = ob.needed_enery_per_broker
+    def run_mcts(self, mcts, initial_needed_enery):
+        needed_energy = initial_needed_enery
         visited = list()
 
-        cur = self
-        visited.append(cur)
+        visited.append(self)
 
-        if(cur.is_leaf()):
-            print('cur.isLeaf() is 0! This should not happen!')
+        if(self.is_leaf()):
+            if len(self.children) == 0 and self.hour_ahead_auction != 0:
+                self.expand(mcts)
 
         avg_mcp = 0.0
         
-        while (cur.is_leaf() == False) and (needed_energy != 0):
-            if len(cur.children) == 0:
-                cur.expand(mcts)
+        while self.is_leaf() == False and needed_energy != 0:
 
-            unvisited_children = self.unvisited_children(cur)
+            unvisited_children = self.unvisited_children()
 
-            if (unvisited_children == (action.get_action_size())):              # If this is first visit select random child
-                cur = cur.select_random(mcts)
+            if (unvisited_children == (mcts.get_action_set().get_action_size())):              # If this is first visit select random child
+                self = self.select_random(mcts)
             else:
                 balancing_price = 150.0 if(avg_mcp == 0.0) else 3*avg_mcp      
-                cur = cur.select(mcts, ob, balancing_price)                     # UCT based selection
-            visited.append(cur)
+                self = self.select(initial_needed_enery, balancing_price)                      # UCT based selection
+            visited.append(self)
 
-        for iter in reversed(visited):
-            print(iter.to_string())
+        # for iter in visited:
+        #     print(iter.to_string())
         
-        print('\nStarting the Simulation ...')
-        sim_cost = self.simulation(cur, ob, needed_energy, mcts.supply, mcts.demand, mcts.quantities)
-        print('\nSimulation Done ! \nSimulation Cost: ', sim_cost)
+        # print('\nStarting the Simulation ...')
+        sim_cost = self.simulation(needed_energy, mcts.supply, mcts.demand, mcts.quantities)
+        # print('\nSimulation Done ! \nSimulation Cost: ', sim_cost)
 
         for iter in reversed(visited):
             # sim_cost += iter.current_node_cost   # TO DO: see if i'm double counting for the last node?
             iter.update_stats(sim_cost)
-            print(iter.to_string())
+            # print(iter.to_string())
             
 
     def select_random(self, mcts):
@@ -275,7 +259,7 @@ class TreeNode:
                 self.children.update({i: self.children.get(0)})
 
 
-    def final_select(self, ob):
+    def final_select(self):
         selected = None
         best_value = -1e9
 
@@ -289,7 +273,7 @@ class TreeNode:
         return selected
 
 
-    def select(self, mcts, ob, balancing_price):
+    def select(self, initial_needed_enery, balancing_price):
         selected = None
         best_value = -1e9
     
@@ -304,7 +288,7 @@ class TreeNode:
                 n_visit_value = self.children.get(child).n_visits + self.epsilon
                 total_point = self.children.get(child).tot_value
     
-            dividend = -balancing_price * abs(ob.initial_needed_enery_mcts_broker)
+            dividend = -balancing_price * abs(initial_needed_enery)
             total_point = 1 - total_point / dividend
 
             visit_point = math.sqrt(2 * math.log(self.n_visits + 1) / n_visit_value)
@@ -318,7 +302,7 @@ class TreeNode:
         return selected
 
 
-    def simulation(self, tn, ob, needed_mwh, supply, demand, quantities):
+    def simulation(self, needed_mwh, supply, demand, quantities):
         # bids = list()
         auction_proximity = self.hour_ahead_auction
 
@@ -429,7 +413,7 @@ class TreeNode:
 
 
     def is_leaf(self):
-        return True if self.hour_ahead_auction == 0 else False       # No more chances
+        return True if (self.hour_ahead_auction == 0 or len(self.children) == 0) else False       # No more chances
     
 
     def update_stats(self, sim_cost):
