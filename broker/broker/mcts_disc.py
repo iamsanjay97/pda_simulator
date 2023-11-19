@@ -10,6 +10,7 @@ import pdauction
 import broker
 
 from gym import spaces
+from tqdm import tqdm
 from collections import OrderedDict
 
 # sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator/broker/broker')
@@ -85,7 +86,7 @@ class MCTS_Disc(gym.Env):
         bids = list()
         if rem_quantity > 0.0:
             if not random:
-                for i in range(self.number_of_rollouts): 
+                for i in tqdm(range(self.number_of_rollouts)): 
                     root.run_mcts(mcts, rem_quantity)
 
                 best_move = root.final_select()
