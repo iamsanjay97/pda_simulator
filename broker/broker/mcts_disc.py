@@ -18,7 +18,7 @@ from config import Config
 
 '''
 State: Proximity
-Action: Discretized actions for limit-price and quantity (total 49 actions)
+Action: Discretized actions for limit-price (total 7 actions)
 Reward: Purchase cost at each step
 '''
 
@@ -101,8 +101,7 @@ class MCTS_Disc(gym.Env):
             if(best_move != None):
                 limit_price_range = [10, 100]    # TO DO: some way of getting this?
                 limit_price = -(best_move.limit_price_fractions[0]*limit_price_range[0] + best_move.limit_price_fractions[1]*limit_price_range[1])
-                quantity = best_move.quantity_ratio*rem_quantity
-                bids.append([self.id, limit_price, quantity])
+                bids.append([self.id, limit_price, rem_quantity])
         else:
             bids.append([self.id, config.market_order_bid_price, rem_quantity])
 
@@ -119,9 +118,8 @@ class Action:
     
     def __init__(self, index=0): 
         self.index = index
-        self.quantityRatio = np.array([0.0, 0.16, 0.33, 0.5, 0.66, 0.84, 1.0])
         self.multiplier = np.array([[1.0, 0.0], [0.84, 0.16], [0.66, 0.33], [0.50, 0.50], [0.33, 0.66], [0.16, 0.84], [0.0, 1.0]])
-        self.max_action = self.quantityRatio.shape[0] * self.multiplier.shape[0]
+        self.max_action = self.multiplier.shape[0]
 
     def get_action_index(self):
         return self.index
@@ -129,31 +127,17 @@ class Action:
     def get_action_size(self):
         return self.max_action
     
-    def get_qauntity_action_size(self):
-        return self.quantityRatio.shape[0]
-    
     def get_limit_price(self, minPrice, maxPrice, index):
       factor = self.multiplier[index]
       return minPrice*factor[0] + maxPrice*factor[1]
-    
-    def get_quantity_to_bid(self, index, neededKwh):
-      return self.quantityRatio[index] * neededKwh
 
     def get_limit_price_fractions(self, index):
-      quotient = int(index / self.quantityRatio.shape[0])
-      return self.multiplier[quotient]
-
-    def get_quantity_ratio(self, index):
-      reminder = index % self.quantityRatio.shape[0]
-      return self.quantityRatio[reminder]
+      return self.multiplier[index]
     
     def get_wholesale_bid(self, minPrice, maxPrice, neededKwh):
-      quotient = self.index / self.quantityRatio.shape[0]
-      reminder = self.index % self.quantityRatio.shape[0]
-
+      quotient = self.index 
       price = self.get_limit_price(minPrice, maxPrice, quotient)
-      quantity = self.get_quantity_to_bid(reminder, neededKwh)
-      return price, quantity
+      return price, neededKwh
 
     def set_action_index(self, index):
         self.index = index
@@ -180,7 +164,6 @@ class TreeNode:
             self.hour_ahead_auction = 0
             self.applied_action = 0
             self.limit_price_fractions = 0
-            self.quantity_ratio = 0
         else:
             self.n_visits = node.n_visits
             self.tot_value = node.tot_value
@@ -189,7 +172,6 @@ class TreeNode:
             self.hour_ahead_auction = node.hour_ahead_auction
             self.applied_action = node.applied_action
             self.limit_price_fractions = node.limit_price_fractions 
-            self.quantity_ratio = node.quantity_ratio
 
     
     def unvisited_children(self):
@@ -249,15 +231,11 @@ class TreeNode:
         new_hour_ahead_auction = self.hour_ahead_auction - 1
 
         for i in range(n_actions):
-            if (i == 0) or (i % mcts.get_action_set().get_qauntity_action_size() != 0):
-                tn = TreeNode()
-                tn.hour_ahead_auction = new_hour_ahead_auction
-                tn.applied_action = i
-                tn.limit_price_fractions = mcts.get_action_set().get_limit_price_fractions(i)
-                tn.quantity_ratio = mcts.get_action_set().get_quantity_ratio(i)
-                self.children.update({i: tn})
-            else:
-                self.children.update({i: self.children.get(0)})
+            tn = TreeNode()
+            tn.hour_ahead_auction = new_hour_ahead_auction
+            tn.applied_action = i
+            tn.limit_price_fractions = mcts.get_action_set().get_limit_price_fractions(i)
+            self.children.update({i: tn})
 
 
     def final_select(self):
