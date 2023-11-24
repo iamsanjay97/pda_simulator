@@ -33,7 +33,7 @@ class ZIP(gym.Env):
         self.seed_value = 0 # seed value will be overidden
 
         self.observation_space = spaces.Box(0, 1, shape=(2,), dtype=float)
-        self.action_space = gym.Space.Discrete(4)
+        self.action_space = spaces.Discrete(4)
         self.render_mode = render_mode
         self.type = "ZIP"
 
@@ -59,7 +59,7 @@ class ZIP(gym.Env):
     def set_last_mcp(self, mcp):
         self.last_mcp = mcp
 
-    def bids(self, timeslot, currentTimeslot, random=False):
+    def bids(self, timeslot, currentTimeslot, random=False, uct=False):
 
         rem_quantity = self.total_demand - self.cleared_demand
         

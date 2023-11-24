@@ -39,7 +39,7 @@ class ZI(gym.Env):
         quantity = max(rem_quantity/self.number_of_bids, self.min_bid_quant)
         return price, quantity
     
-    def bids(self, timeslot, currentTimeslot, random=False):
+    def bids(self, timeslot, currentTimeslot, random=False, uct=False):
         rem_quantity = self.total_demand - self.cleared_demand
         
         if rem_quantity < self.min_bid_quant:

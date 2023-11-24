@@ -5,13 +5,13 @@ import pandas as pd
 
 import genco
 import pdauction
-from broker import zi, zip, mcts_disc
+from broker import zi, zip, mcts_disc, mcts_cont_spw
 
 from config import Config
 from collections import OrderedDict
 
 name_of_sellers = ['cp_genco']
-name_of_buyers = ['MCTS_Dis', 'ZI']
+name_of_buyers = ['MCTS_Cont', 'ZI']
 
 list_of_sellers = dict()
 list_of_buyers = dict()
@@ -24,10 +24,10 @@ for seller in name_of_sellers:
     seller_obj.set_id('cp_genco')
     list_of_sellers.update({seller: seller_obj})
     
-buyer1 = gym.make('MCTS_Disc-v0')
-buyer1.set(config.market_demand*0.3, 1, id=name_of_buyers[0])
+buyer1 = gym.make('MCTS_Cont_SPW-v0')
+buyer1.set(config.market_demand*0.45, 1, id=name_of_buyers[0])
 buyer2 = gym.make('ZI-v0')
-buyer2.set(config.market_demand*0.7, 1, id=name_of_buyers[1])
+buyer2.set(config.market_demand*0.55, 1, id=name_of_buyers[1])
 # buyer3 = MCTS_Desc(config.market_demand*0.4, 5, id=name_of_buyers[2])
 
 list_of_buyers.update({name_of_buyers[0]: buyer1})

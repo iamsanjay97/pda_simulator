@@ -70,7 +70,7 @@ class MCTS_Disc(gym.Env):
     def set_quantities(self, player_total_demand):
         self.quantities = player_total_demand
 
-    def bids(self, timeslot, current_timeslot, random=False):
+    def bids(self, timeslot, current_timeslot, random=False, uct=False):
 
         rem_quantity = self.total_demand - self.cleared_demand
         
