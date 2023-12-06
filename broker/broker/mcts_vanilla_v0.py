@@ -20,21 +20,21 @@ from config import Config
 
 '''
 State: Proximity
-Action: Continuous actions for limit-price using Simple Progressive Widening
+Action: Discretized actions for limit-price (total 7 actions)
 Reward: Average limitprice at each step
 '''
 
 config = Config()
 
-class MCTS_Cont_SPW(gym.Env):
-    metadata = {"render_modes": ["human"], "render_fps": 4, "name": "MCTS_Cont_SPW-v0"}
+class MCTS_Vanilla(gym.Env):
+    metadata = {"render_modes": ["human"], "render_fps": 4, "name": "MCTS_Vanilla-v0"}
 
     def __init__(self, render_mode=None):
         self.seed_value = 0 # seed value will be overidden
         self.observation_space = spaces.Discrete(25)
-        self.action_space = spaces.Box(-100.0, -10.0, shape=(1,), dtype=float)
+        self.action_space = spaces.Discrete(4)
         self.render_mode = render_mode
-        self.type = "Continuous MCTS SPW"
+        self.type = "Discrete MCTS"
 
     def set(self, total_demand, number_of_bids=1, buy_limit_price_min=-100.0, buy_limit_price_max=-1.0, sell_limit_price_min=0.5, sell_limit_price_max=90.0, id='MCTS'):
         self.id = id
@@ -46,8 +46,9 @@ class MCTS_Cont_SPW(gym.Env):
         self.buy_limit_price_max = buy_limit_price_max
         self.sell_limit_price_min = sell_limit_price_min
         self.sell_limit_price_max = sell_limit_price_max
-        self.last_mcp = config.DEFAULT_MCP        
-        self.action_space = spaces.Box(buy_limit_price_min, buy_limit_price_max, shape=(1,), dtype=float)
+        self.last_mcp = config.DEFAULT_MCP    
+
+        self.action = Action()    
 
     def set_cleared_demand(self, cleared_demand):
         self.cleared_demand += cleared_demand
@@ -89,22 +90,25 @@ class MCTS_Cont_SPW(gym.Env):
                     mcts = copy.deepcopy(self)
                     root.run_mcts(mcts, rem_quantity)
 
-                # parallelizing simulation using multiprocessing 
-                # with multiprocessing.Pool() as pool: 
-                #     mcts = copy.deepcopy(self)
-                #     pool.map(root.run_mcts, mcts, rem_quantity) 
-
-                best_limitprice = root.best_action()           # limitprice is negative
-                print("\nBest Move: ", best_limitprice)
+                best_move = root.best_action()
+                print("\nBest Move: ", best_move.to_string())
             else:
-                best_limitprice = root.default_policy(self)      # limitprice is negative
+                best_move = root.default_policy(self)
 
-            if(best_limitprice != None):
-                bids.append([self.id, best_limitprice, rem_quantity])
+            if(best_move != None):
+                limit_price_range = [self.buy_limit_price_min, self.buy_limit_price_max]  
+                limit_price = -(best_move.limit_price_fractions[0]*limit_price_range[0] + best_move.limit_price_fractions[1]*limit_price_range[1])
+                bids.append([self.id, limit_price, rem_quantity])
         else:
             bids.append([self.id, config.market_order_bid_price, rem_quantity])
 
         return bids
+    
+    def get_limitprice(self, index):
+        limit_price_range = [self.buy_limit_price_min, self.buy_limit_price_max]  
+        best_fractions = self.get_action_set().get_limit_price_fractions(index)
+        limit_price = -(best_fractions[0]*limit_price_range[0] + best_fractions[1]*limit_price_range[1])
+        return limit_price
     
     def reset(self):
         pass
@@ -113,9 +117,41 @@ class MCTS_Cont_SPW(gym.Env):
         pass
 
 
+class Action:
+    
+    def __init__(self, index=0): 
+        self.index = index
+        self.multiplier = np.array([[1.0, 0.0], [0.84, 0.16], [0.66, 0.33], [0.50, 0.50], [0.33, 0.66], [0.16, 0.84], [0.0, 1.0]])
+        self.max_action = self.multiplier.shape[0]
+
+    def get_action_index(self):
+        return self.index
+    
+    def get_action_size(self):
+        return self.max_action
+    
+    def get_limit_price(self, minPrice, maxPrice, index):
+      factor = self.multiplier[index]
+      return minPrice*factor[0] + maxPrice*factor[1]
+
+    def get_limit_price_fractions(self, index):
+      return self.multiplier[index]
+    
+    def get_wholesale_bid(self, minPrice, maxPrice, neededKwh):
+      quotient = self.index 
+      price = self.get_limit_price(minPrice, maxPrice, quotient)
+      return price, neededKwh
+
+    def set_action_index(self, index):
+        self.index = index
+
+    def to_string(self):
+      return str(self.index)
+
+
 class TreeNode:
     
-    def __init__(self, id='MCTS_Cont_SPW'):
+    def __init__(self, id='MCTS_Vanilla', node=None):
         self.id = id
         self.epsilon = 1e-6
         self.alpha = 0.5
@@ -124,10 +160,11 @@ class TreeNode:
         self.children = dict()
         
         self.n_visits = 0
-        self.tot_cost = 0
+        self.tot_value = 0
 
         self.hour_ahead_auction = 0
-        self.applied_action_lp = 0
+        self.applied_action = 0
+        self.limit_price_fractions = 0
         
     
     def is_leaf(self, rem_quantity):
@@ -135,15 +172,16 @@ class TreeNode:
     
     
     def random_select(self, mcts):
-        lp = np.random.uniform(mcts.buy_limit_price_min, mcts.buy_limit_price_max)  # this lp acts as an index
+        i = np.random.randint(0, mcts.get_action_set().get_action_size())
         node = TreeNode()
         node.hour_ahead_auction = self.hour_ahead_auction-1
-        node.applied_action_lp = lp
+        node.applied_action = i
+        node.limit_price_fractions = mcts.get_action_set().get_limit_price_fractions(i)
         
-        return lp, node
+        return i, node
     
     
-    def uct_select(self):
+    def uct_select(self, mcts):
         selected = None
         best_value = -1e9
         
@@ -153,31 +191,24 @@ class TreeNode:
 
             if self.children.get(child).n_visits == 0:
                 n_visit_value = 1 + self.epsilon
-                # total_point = self.children.get(child).tot_cost / n_visit_value
+                # total_point = self.children.get(child).tot_value / n_visit_value
             else:
                 n_visit_value = self.children.get(child).n_visits + self.epsilon
-                # total_point = self.children.get(child).tot_cost / n_visit_value
+                # total_point = self.children.get(child).tot_value / n_visit_value
     
             visit_point = math.sqrt(2 * math.log(self.n_visits + 1) / n_visit_value)
             rand_point = np.random.random() * self.epsilon
-            uct_value = self.children.get(child).tot_cost + self.K*visit_point + rand_point
+            uct_value = self.children.get(child).tot_value + self.K*visit_point + rand_point
 
             if uct_value > best_value:
                 selected = self.children.get(child)
                 best_value = uct_value
 
-        return selected
-    
-    
-    def select(self, mcts):
-                
-        if math.pow(self.n_visits, self.alpha) >= len(self.children):
-            action, next_state = self.random_select(mcts)                # action is the limitprice, next_state is the new TreeNode
-            self.children.update({action: next_state})
-        else:
-            next_state = self.uct_select() 
+        if selected == None:
+            action, selected = self.random_select(mcts)                # action is the limitprice, next_state is the new TreeNode
+            self.children.update({action: selected})
 
-        return next_state
+        return selected
     
     
     def step(self, limitprice, needed_mwh, list_of_sellers, list_of_buyers, pda):
@@ -306,20 +337,27 @@ class TreeNode:
     
     
     def best_action(self):
-        
-        selected = None
-        best_lp = -1e9
-        
-        for child in self.children:
-            if self.children.get(child).tot_cost > best_lp:
-                selected = self.children.get(child)
-                best_lp = self.children.get(child).tot_cost
 
-        return selected.applied_action_lp
+        selected = None
+        best_value = -1e9
+
+        for child in self.children:
+            total_point = self.children.get(child).tot_value
+
+            if total_point > best_value:
+                selected = self.children.get(child)
+                best_value = total_point
+
+        return selected
     
     
     def default_policy(self, mcts):
-        return np.random.uniform(mcts.buy_limit_price_min, mcts.buy_limit_price_max)
+        i = np.random.randint(0, mcts.get_action_set().get_action_size())
+        node = TreeNode()
+        node.hour_ahead_auction = self.hour_ahead_auction-1
+        node.applied_action = i
+        node.limit_price_fractions = mcts.get_action_set().get_limit_price_fractions(i)
+        return node
         
     
     def run_mcts(self, mcts, rem_quantity):
@@ -353,7 +391,7 @@ class TreeNode:
             seller_obj.set_cleared_quantity(mcts.supply[seller])
             list_of_sellers.update({seller: seller_obj})
             
-        buyer1 = gym.make('MCTS_Cont_SPW-v0')
+        buyer1 = gym.make('MCTS_Vanilla-v0')
         buyer1.set(mcts.quantities[name_of_buyers[0]], 1, id=name_of_buyers[0])
         buyer1.set_cleared_demand(mcts.demand[name_of_buyers[0]])
         buyer2 = gym.make('ZI-v0')
@@ -365,16 +403,18 @@ class TreeNode:
         
         while self.is_leaf(rem_quantity) == False:
             
-            x_next = self.select(mcts)
-            r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
+            x_next = self.uct_select(mcts)
+            x_next_limitprice = mcts.get_limitprice(x_next.applied_action)
+            r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(x_next_limitprice, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
             reward.append(r)
             cleared_quantity.append(q)
             visited.append(x_next)
             self = x_next
 
         # expand  
-        x_next = self.select(mcts)
-        r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
+        x_next = self.uct_select(mcts)
+        x_next_limitprice = mcts.get_limitprice(x_next.applied_action)
+        r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(x_next_limitprice, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
         reward.append(r)
         cleared_quantity.append(q)
         visited.append(x_next)
@@ -389,7 +429,7 @@ class TreeNode:
             total = -config.DEFAULT_MCP if (cur_quan + q) == 0 else (cur_cost*cur_quan + r*q) / (cur_quan + q)
             cur_cost = total
             cur_quan += q
-            iter.tot_cost = (iter.tot_cost*iter.n_visits + total) / (iter.n_visits+1)
+            iter.tot_value = (iter.tot_value*iter.n_visits + total) / (iter.n_visits+1)
             iter.n_visits += 1
 
         self = cur
@@ -399,13 +439,13 @@ class TreeNode:
 
         ret = '\n'
         ret += 'Number of Visits: ' + str(self.n_visits) + '\n'
-        ret += 'Total Value: ' + str(self.tot_cost) + '\n'
+        ret += 'Total Value: ' + str(self.tot_value) + '\n'
         ret += 'Proximity: ' + str(self.hour_ahead_auction )+ '\n'
-        ret += 'Applied Action Index: ' + str(self.applied_action_lp) + '\n'
+        ret += 'Applied Action: ' + str(self.limit_price_fractions) + '\n'
 
         return ret
     
 gym.envs.register(
-    id='MCTS_Cont_SPW-v0',
-    entry_point='broker.mcts_cont_spw:MCTS_Cont_SPW',
+    id='MCTS_Vanilla-v0',
+    entry_point='broker.mcts_vanilla_v0:MCTS_Vanilla',
 )
