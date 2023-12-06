@@ -346,7 +346,7 @@ class TreeNode:
             # print(bids_df)
                         
             # market clearing
-            mcp, mcq, cleared_asks_df, cleared_bids_df = pda.clearing_mechanism(asks_df, bids_df)
+            mcp, mcq, cleared_asks_df, cleared_bids_df, last_uncleared_ask = pda.clearing_mechanism(asks_df, bids_df)
             mcts_cleared_quantity = 0
 
             # update the cleared quantity of sellers

@@ -5,13 +5,13 @@ import pandas as pd
 
 import genco
 import pdauction
-from broker import zi, zip, mcts_disc, mcts_cont_spw
+from broker import zi, zip, mcts_vanilla_v0, mcts_vanilla_v1, mcts_cont_spw
 
 from config import Config
 from collections import OrderedDict
 
 name_of_sellers = ['cp_genco']
-name_of_buyers = ['MCTS_Cont', 'ZI']
+name_of_buyers = ['MCTS_Vanilla', 'ZI']
 
 list_of_sellers = dict()
 list_of_buyers = dict()
@@ -24,7 +24,7 @@ for seller in name_of_sellers:
     seller_obj.set_id('cp_genco')
     list_of_sellers.update({seller: seller_obj})
     
-buyer1 = gym.make('MCTS_Cont_SPW-v0')
+buyer1 = gym.make('MCTS_Vanilla-v0')
 buyer1.set(config.market_demand*0.45, 1, id=name_of_buyers[0])
 buyer2 = gym.make('ZI-v0')
 buyer2.set(config.market_demand*0.55, 1, id=name_of_buyers[1])
@@ -83,7 +83,7 @@ while(cur_round < rounds):
     print(bids_df)
                 
     # market clearing
-    mcp, mcq, cleared_asks_df, cleared_bids_df = pda.clearing_mechanism(asks_df, bids_df)
+    mcp, mcq, cleared_asks_df, cleared_bids_df, last_uncleared_ask = pda.clearing_mechanism(asks_df, bids_df)
     
     # update the cleared quantity of sellers
     for seller in list_of_sellers.keys():
@@ -99,6 +99,9 @@ while(cur_round < rounds):
             buyer_cq = temp.sum()['Quantity'][buyer]
             list_of_buyers[buyer].set_cleared_demand(buyer_cq)
             list_of_buyers[buyer].set_last_mcp(mcp)
+        
+    if mcq != 0.0:
+        buyer1.update_buy_limit_price_max(-last_uncleared_ask)
     
     print('\n----------From Handler: At Proxomity ', proximity, '------\n')
     print('MCP', mcp)
