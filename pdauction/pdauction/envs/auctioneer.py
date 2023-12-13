@@ -51,6 +51,7 @@ class AuctioneerEnv(gym.Env):
         mcp = 40.0                                    # default macp when both ask and bid are market order                      
         cleared_asks = list()
         cleared_bids = list()
+        last_uncleared_ask = 0.0
 
         i = 0
 
@@ -72,12 +73,12 @@ class AuctioneerEnv(gym.Env):
                 if (ask[1] != 0):
                     mcp = ask[1] * (1.0 + config.default_margin)
 
-
             if (transfer == bid[2]):                   # bid is fully cleared 
                 asks_df['Quantity'][:1] = asks_df['Quantity'][:1] + transfer   # ask quantity is negative
                 ask[2] = -transfer
                 cleared_asks.append(ask)
                 cleared_bids.append(bid)
+                last_uncleared_ask = ask[1]
                 bids_df = bids_df[1:]
             else:                                     # ask is fully cleared  
                 bids_df['Quantity'][:1] = bids_df['Quantity'][:1] - transfer
@@ -85,11 +86,12 @@ class AuctioneerEnv(gym.Env):
                 cleared_bids.append(bid)
                 cleared_asks.append(ask)
                 asks_df = asks_df[1:]
+                last_uncleared_ask = asks_df[:1].values[0][1]
 
         cleared_asks_df = pd.DataFrame(cleared_asks, columns=['ID', 'Price', 'Quantity'])
         cleared_bids_df = pd.DataFrame(cleared_bids, columns=['ID', 'Price', 'Quantity'])
         
-        return mcp, total_mwh, cleared_asks_df, cleared_bids_df
+        return mcp, total_mwh, cleared_asks_df, cleared_bids_df, last_uncleared_ask
 
 
     def reset(self):

@@ -7,9 +7,10 @@ class Config:
     def __init__(self):
         self.k = 0.5                                    # factor k for k-double auction clearning
         self.default_margin = 0.05                      # margin when seller's ask is market-order
-        self.market_demand = np.random.normal(120, 10)  # randomly generated market demand (in mwh)
+        self.market_demand = np.random.normal(220, 10)  # randomly generated market demand (in mwh)
         self.market_order_bid_price = 1e9
         self.market_order_ask_price = 0
-        self.DEFAULT_MCP = 40
+        self.DEFAULT_MCP = 50
         self.HOUR_AHEAD_AUCTIONS = 24
-        self.NUMBER_OF_ROLLOUTS = 1000
+        self.NUMBER_OF_ROLLOUTS = 100
+        self.balancing_price = 90.0
