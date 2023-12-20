@@ -12,10 +12,10 @@ import broker
 
 from gym import spaces
 from tqdm import tqdm
-from collections import OrderedDict
+from sortedcontainers import SortedDict
 
-sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
-# sys.path.append('D:\PowerTAC\TCS\mcts_thread\pda_simulator')
+# sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
+sys.path.append('D:\PowerTAC\TCS\mcts\pda_simulator')
 from config import Config
 
 '''
@@ -72,16 +72,17 @@ class MCTS_Cont_Regression(gym.Env):
         self.quantities = player_total_demand
 
     def update_buy_limit_price_max(self, price):
-        self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+        # self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+        pass  # do not narrow the limitprice range, miso is selling so need to place lower limitprices
 
     # this gets updated based on the actual auction dynamics, contains actual mcp and mcp
     def update_auction_data(self, proximity, cp, cq):
-        if self.auction_data[proximity] == None:
-            temp_list = [[cp, cq]]
+        if proximity not in self.auction_data.keys():
+            temp_dict = SortedDict({cp: cq})
         else:
-            temp_list = self.auction_data[proximity]
-            temp_list.append([cp, cq])
-        self.auction_data.update({proximity: temp_list})
+            temp_dict = self.auction_data[proximity]
+            temp_dict.setdefault(cp, cq)
+        self.auction_data.update({proximity: temp_dict})
 
     def bids(self, timeslot, current_timeslot, return_buyers_df=None, random=False):
 
@@ -146,30 +147,66 @@ class TreeNode:
         self.children = dict()
         
         self.n_visits = 0
-        self.tot_cost = 0   # weighted average clearing price for the simulation below this node
+        self.tot_cost = 0   # weighted average clearing price for the simulation below this node (negative value as it is a cost)
 
         self.hour_ahead_auction = 0
         self.applied_action_lp = 0
         self.p_cleared = 0.0  # clearing probability for the applied_action_lp
-
-        self.p_cleared_data = dict()
         
     
     # this gets updates within simulation using actual auction data, but for limitprices 
     # placed during the simulation phase
-    def update_p_cleared_data(self, proximity, lp):
-        keys = self.p_cleared_data[proximity]
+    def get_p_cleared(self, proximity, lp, auction_data):
 
-        if lp not in keys:
-            self.p_cleared_data.update({})
+        if proximity not in auction_data.keys():
+            return -1
+        
+        data = auction_data[proximity]
+        
+        total_cleared = sum(data.values())
+        this_cleared = 0.0
+
+        for item in data:
+            if lp > item:
+                this_cleared += data[item]
+            else:
+                break
+
+        if total_cleared != 0:
+            return this_cleared/total_cleared
+        else:
+            return 0
 
     
     def is_leaf(self, rem_quantity):
         return True if (self.hour_ahead_auction == 0 or len(self.children) == 0 or rem_quantity == 0) else False 
     
     
-    def random_select(self, mcts):
-        lp = np.random.uniform(mcts.buy_limit_price_min, mcts.buy_limit_price_max)  # this lp acts as an index
+    # modified selection function
+    # we check proximity of the auction, sample a limiprices and calculate their p_cleared
+    # and pick the limitprice which is in the desirable range of p_cleared values
+    # proximity 24 to 17 -> p_cleared [0.10, 0.50]
+    # proximity 18 to 7 -> p_cleared [0.25, 0.75]
+    # proximity 6 to 1 -> p_cleared [0.75, 1.0]
+    def random_select(self, mcts, proximity):
+
+        lp = None
+        while True:
+            lp = np.random.uniform(mcts.buy_limit_price_min, mcts.buy_limit_price_max)
+            prob = self.get_p_cleared(proximity, lp, mcts.auction_data)
+
+            if prob == -1:
+                break
+
+            if ((proximity > 18) and (proximity <= 24)) and ((prob > 0.1) and (prob <= 0.5)):
+                break
+
+            if ((proximity > 6) and (proximity <= 18)) and ((prob > 0.25) and (prob <= 0.75)):
+                break
+
+            if ((proximity > 0) and (proximity <= 6)) and ((prob > 0.75) and (prob <= 1.0)):
+                break
+
         node = TreeNode()
         node.hour_ahead_auction = self.hour_ahead_auction-1
         node.applied_action_lp = lp
@@ -203,10 +240,10 @@ class TreeNode:
         return selected
     
     
-    def select(self, mcts):
+    def select(self, mcts, proximity):
                 
         if math.pow(self.n_visits, self.alpha) >= len(self.children):
-            action, next_state = self.random_select(mcts)                # action is the limitprice, next_state is the new TreeNode
+            action, next_state = self.random_select(mcts, proximity)                # action is the limitprice, next_state is the new TreeNode
             self.children.update({action: next_state})
         else:
             next_state = self.uct_select() 
@@ -343,8 +380,8 @@ class TreeNode:
         rem_energy = needed_mwh - mcts_total_cleared_quantity
 
         b_price = 150.0 if (avg_mcp == 0.0) else 3*avg_mcp                      #  3 times the avg clearing price
-        balancing_sim_sost = -abs(rem_energy) * b_price
-        total_cost += balancing_sim_sost
+        balancing_sim_cost = -abs(rem_energy) * b_price
+        total_cost += balancing_sim_cost
 
         avg_clearing_price = -config.DEFAULT_MCP if needed_mwh == 0 else total_cost/needed_mwh
 
@@ -408,11 +445,12 @@ class TreeNode:
 
         list_of_buyers.update({name_of_buyers[0]: buyer1})
         list_of_buyers.update({name_of_buyers[1]: buyer2})
-        
+
         while self.is_leaf(rem_quantity) == False:
-            
-            x_next = self.select(mcts)
-            self.update_p_cleared_data(self.hour_ahead_auction, x_next.applied_action_lp)
+
+            x_next = self.select(mcts, self.hour_ahead_auction)
+            prob = self.get_p_cleared(self.hour_ahead_auction, x_next.applied_action_lp, mcts.auction_data)
+            x_next.p_cleared = prob
             r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(mcts, x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
             reward.append(r)
             cleared_quantity.append(q)
@@ -420,8 +458,9 @@ class TreeNode:
             self = x_next
 
         # expand  
-        x_next = self.select(mcts)
-        self.update_p_cleared_data(self.hour_ahead_auction, x_next.applied_action_lp)
+        x_next = self.select(mcts, self.hour_ahead_auction)
+        prob = self.get_p_cleared(self.hour_ahead_auction, x_next.applied_action_lp, mcts.auction_data)
+        x_next.p_cleared = prob
         r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(mcts, x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
         reward.append(r)
         cleared_quantity.append(q)

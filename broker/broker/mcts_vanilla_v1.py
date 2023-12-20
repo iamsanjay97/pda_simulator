@@ -14,8 +14,8 @@ from gym import spaces
 from tqdm import tqdm
 from collections import OrderedDict
 
-# sys.path.append('/mnt/d/PowerTAC/TCS/mcts_thread/pda_simulator')
-# sys.path.append('D:\PowerTAC\TCS\mcts_thread\pda_simulator')
+# sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
+sys.path.append('D:\PowerTAC\TCS\mcts\pda_simulator')
 from config import Config
 
 '''
@@ -71,7 +71,8 @@ class MCTS_Vanilla(gym.Env):
         self.quantities = player_total_demand
 
     def update_buy_limit_price_max(self, price):
-        self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+        # self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+        pass  # do not narrow the limitprice range, miso is selling so need to place lower limitprices
 
     def bids(self, timeslot, current_timeslot, return_buyers_df=None, random=False):
 

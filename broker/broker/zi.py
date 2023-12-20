@@ -74,7 +74,8 @@ class ZI(gym.Env):
         self.quantities = player_total_demand
 
     def update_buy_limit_price_max(self, price):
-        self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+        # self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+        pass  # do not narrow the limitprice range, miso is selling so need to place lower limitprices
 
     def reset(self):
         pass

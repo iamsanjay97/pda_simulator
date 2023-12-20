@@ -6,7 +6,7 @@ import multiprocessing
 
 import genco
 import pdauction
-from broker import zi, zip, mcts_vanilla_v0, mcts_vanilla_v1, mcts_cont_spw
+from broker import zi, zip, mcts_vanilla_v0, mcts_vanilla_v1, mcts_cont_spw, mcts_cont_regression
 
 from config import Config
 from collections import OrderedDict
@@ -24,7 +24,7 @@ Auction Handler contains:
 
 name_of_sellers = ['cp_genco']
 # name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
-name_of_buyers = ['MCTS-SPW', 'MCTS-Vanilla', 'ZI']
+name_of_buyers = ['MCTS-Cont-Reg', 'ZI']
 
 list_of_sellers = dict()
 list_of_buyers = dict()
@@ -39,12 +39,10 @@ for seller in name_of_sellers:
 
 buyers = [None]*len(name_of_buyers)
     
-buyers[0] = gym.make('MCTS_Cont_SPW-v0')
-buyers[0].set(config.market_demand*0.34, 1, id=name_of_buyers[0])
-buyers[1] = gym.make('MCTS_Vanilla-v0')
-buyers[1].set(config.market_demand*0.33, 1, id=name_of_buyers[1])
-buyers[2] = gym.make('ZI-v0')
-buyers[2].set(config.market_demand*0.33, 1, id=name_of_buyers[2])
+buyers[0] = gym.make('MCTS_Cont_Regression-v0')
+buyers[0].set(config.market_demand*0.51, 1, id=name_of_buyers[0])
+buyers[1] = gym.make('ZI-v0')
+buyers[1].set(config.market_demand*0.49, 1, id=name_of_buyers[1])
 
 # buyers[0] = gym.make('ZI-v0')
 # buyers[0].set(config.market_demand*0.34, 1, id=name_of_buyers[0])
