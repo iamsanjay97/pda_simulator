@@ -14,3 +14,4 @@ class Config:
         self.HOUR_AHEAD_AUCTIONS = 24
         self.NUMBER_OF_ROLLOUTS = 100
         self.balancing_price = 90.0
+        self.parallel = False                           # to place bids parallaly

@@ -59,12 +59,27 @@ class ZIP(gym.Env):
     def set_last_mcp(self, mcp):
         self.last_mcp = mcp
 
-    def bids(self, timeslot, currentTimeslot, random=False, uct=False):
+    def set_supply(self, seller_quantities):
+        self.supply = seller_quantities
+
+    def set_demand(self, player_quantities):
+        self.demand = player_quantities
+    
+    def set_quantities(self, player_total_demand):
+        self.quantities = player_total_demand
+
+    def update_buy_limit_price_max(self, price):
+        self.buy_limit_price_max = max(self.buy_limit_price_min, price)
+
+    def bids(self, timeslot, currentTimeslot, return_buyers_df=None, random=False, uct=False):
 
         rem_quantity = self.total_demand - self.cleared_demand
         
         if rem_quantity < self.min_bid_quant:
-            return None
+            if return_buyers_df != None:
+                return_buyers_df[self.id] = None
+            else:
+                return None
         
         amount_needed = rem_quantity
         remaining_tries = timeslot - currentTimeslot
@@ -108,7 +123,10 @@ class ZIP(gym.Env):
         else:
             bids.append([self.id, -config.market_order_bid_price, amount_needed])
 
-        return bids
+        if return_buyers_df != None:
+            return_buyers_df[self.id] = bids
+        else:
+            return bids
     
     def reset(self):
         pass

@@ -49,6 +49,8 @@ class MCTS_Vanilla(gym.Env):
         self.last_mcp = config.DEFAULT_MCP    
 
         self.action = Action()    
+        self.root = TreeNode()  
+        self.root.hour_ahead_auction = config.HOUR_AHEAD_AUCTIONS 
 
     def set_cleared_demand(self, cleared_demand):
         self.cleared_demand += cleared_demand
@@ -71,43 +73,50 @@ class MCTS_Vanilla(gym.Env):
     def update_buy_limit_price_max(self, price):
         self.buy_limit_price_max = max(self.buy_limit_price_min, price)
 
-    def bids(self, timeslot, current_timeslot, random=False):
+    def bids(self, timeslot, current_timeslot, return_buyers_df=None, random=False):
 
         rem_quantity = self.total_demand - self.cleared_demand
         
         if rem_quantity < self.min_bid_quant:
-            return None
+            if return_buyers_df != None:
+                return_buyers_df[self.id] = None
+            else:
+                return None
         
         proximity = timeslot - current_timeslot                         # Proximity runs from 24 to 1 for a day-ahead PDA
         
         bids = list()
-        root = TreeNode()
-        root.hour_ahead_auction = proximity
+        # root = TreeNode()
+        # self.root.hour_ahead_auction = proximity
 
         if rem_quantity > 0.0:
             if not random:
                 for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
                     mcts = copy.deepcopy(self)
-                    root.run_mcts(mcts, rem_quantity)
+                    self.root.run_mcts(mcts, rem_quantity)
 
-                best_move = root.best_action()
+                best_move = self.root.best_action()
+                self.root = best_move
                 print("\nBest Move: ", best_move.to_string())
             else:
-                best_move = root.default_policy(self)
+                best_move = self.root.default_policy(self)
 
             if(best_move != None):
                 limit_price_range = [self.buy_limit_price_min, self.buy_limit_price_max]  
-                limit_price = -(best_move.limit_price_fractions[0]*limit_price_range[0] + best_move.limit_price_fractions[1]*limit_price_range[1])
+                limit_price = best_move.limit_price_fractions[0]*limit_price_range[0] + best_move.limit_price_fractions[1]*limit_price_range[1]
                 bids.append([self.id, limit_price, rem_quantity])
         else:
             bids.append([self.id, config.market_order_bid_price, rem_quantity])
 
-        return bids
-    
+        if return_buyers_df != None:
+            return_buyers_df[self.id] = bids
+        else:
+            return bids
+
     def get_limitprice(self, index):
         limit_price_range = [self.buy_limit_price_min, self.buy_limit_price_max]  
         best_fractions = self.get_action_set().get_limit_price_fractions(index)
-        limit_price = -(best_fractions[0]*limit_price_range[0] + best_fractions[1]*limit_price_range[1])
+        limit_price = best_fractions[0]*limit_price_range[0] + best_fractions[1]*limit_price_range[1]
         return limit_price
     
     def reset(self):
@@ -220,6 +229,12 @@ class TreeNode:
         # asks dataframe
         asks_df = pd.DataFrame(list_of_sellers['cp_genco'].asks(), columns=['ID', 'Price', 'Quantity'])
 
+        # occasionally generate small random asks
+        if (auction_proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
+            random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+            asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
+            asks_df = asks_df.sort_values(by=['Price'])
+
         # bids dataframe
         if auction_proximity == config.HOUR_AHEAD_AUCTIONS:
             bids_df = pd.DataFrame([["miso", -1e9, np.random.normal(800, 100)]], columns=['ID', 'Price', 'Quantity'])
@@ -281,6 +296,12 @@ class TreeNode:
             
             # asks dataframe
             asks_df = pd.DataFrame(list_of_sellers['cp_genco'].asks(), columns=['ID', 'Price', 'Quantity'])
+
+            # occasionally generate small random asks
+            if (auction_proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
+                random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+                asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
+                asks_df = asks_df.sort_values(by=['Price'])
 
             # bids dataframe
             if proximity == config.HOUR_AHEAD_AUCTIONS:      

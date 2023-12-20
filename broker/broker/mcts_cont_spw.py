@@ -14,7 +14,7 @@ from gym import spaces
 from tqdm import tqdm
 from collections import OrderedDict
 
-# sys.path.append('/mnt/d/PowerTAC/TCS/mcts_thread/pda_simulator')
+sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
 # sys.path.append('D:\PowerTAC\TCS\mcts_thread\pda_simulator')
 from config import Config
 
@@ -48,6 +48,8 @@ class MCTS_Cont_SPW(gym.Env):
         self.sell_limit_price_max = sell_limit_price_max
         self.last_mcp = config.DEFAULT_MCP        
         self.action_space = spaces.Box(buy_limit_price_min, buy_limit_price_max, shape=(1,), dtype=float)
+        self.root = TreeNode()  
+        self.root.hour_ahead_auction = config.HOUR_AHEAD_AUCTIONS 
 
     def set_cleared_demand(self, cleared_demand):
         self.cleared_demand += cleared_demand
@@ -70,42 +72,50 @@ class MCTS_Cont_SPW(gym.Env):
     def update_buy_limit_price_max(self, price):
         self.buy_limit_price_max = max(self.buy_limit_price_min, price)
 
-    def bids(self, timeslot, current_timeslot, random=False):
+    def bids(self, timeslot, current_timeslot, return_buyers_df=None, random=False):
 
         rem_quantity = self.total_demand - self.cleared_demand
         
         if rem_quantity < self.min_bid_quant:
-            return None
+            if return_buyers_df != None:
+                return_buyers_df[self.id] = None
+            else:
+                return None
         
         proximity = timeslot - current_timeslot                         # Proximity runs from 24 to 1 for a day-ahead PDA
         
         bids = list()
-        root = TreeNode()
-        root.hour_ahead_auction = proximity
+        # root = TreeNode()                 # keeping a same tree throughout 24 proxmities like alphaGo
+        # self.root.hour_ahead_auction = proximity
+        # print('MCTS SPW called')
 
         if rem_quantity > 0.0:
             if not random:
                 for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
                     mcts = copy.deepcopy(self)
-                    root.run_mcts(mcts, rem_quantity)
+                    self.root.run_mcts(mcts, rem_quantity)
 
                 # parallelizing simulation using multiprocessing 
                 # with multiprocessing.Pool() as pool: 
                 #     mcts = copy.deepcopy(self)
                 #     pool.map(root.run_mcts, mcts, rem_quantity) 
 
-                best_limitprice = root.best_action()           # limitprice is negative
+                self.root = self.root.best_action()
+                best_limitprice = self.root.applied_action_lp           # limitprice is negative
                 print("\nBest Move: ", best_limitprice)
             else:
-                best_limitprice = root.default_policy(self)      # limitprice is negative
+                best_limitprice = self.root.default_policy(self)      # limitprice is negative
 
             if(best_limitprice != None):
                 bids.append([self.id, best_limitprice, rem_quantity])
         else:
             bids.append([self.id, config.market_order_bid_price, rem_quantity])
 
-        return bids
-    
+        if return_buyers_df != None:
+            return_buyers_df[self.id] = bids
+        else:
+            return bids
+
     def reset(self):
         pass
 
@@ -189,6 +199,12 @@ class TreeNode:
         # asks dataframe
         asks_df = pd.DataFrame(list_of_sellers['cp_genco'].asks(), columns=['ID', 'Price', 'Quantity'])
 
+        # occasionally generate small random asks
+        if (auction_proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
+            random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+            asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
+            asks_df = asks_df.sort_values(by=['Price'])
+
         # bids dataframe
         if auction_proximity == config.HOUR_AHEAD_AUCTIONS:
             bids_df = pd.DataFrame([["miso", -1e9, np.random.normal(800, 100)]], columns=['ID', 'Price', 'Quantity'])
@@ -250,6 +266,12 @@ class TreeNode:
             
             # asks dataframe
             asks_df = pd.DataFrame(list_of_sellers['cp_genco'].asks(), columns=['ID', 'Price', 'Quantity'])
+
+            # occasionally generate small random asks
+            if (auction_proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
+                random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+                asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
+                asks_df = asks_df.sort_values(by=['Price'])
 
             # bids dataframe
             if proximity == config.HOUR_AHEAD_AUCTIONS:      
@@ -315,7 +337,7 @@ class TreeNode:
                 selected = self.children.get(child)
                 best_lp = self.children.get(child).tot_cost
 
-        return selected.applied_action_lp
+        return selected
     
     
     def default_policy(self, mcts):
