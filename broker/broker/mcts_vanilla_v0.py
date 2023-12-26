@@ -14,8 +14,8 @@ from gym import spaces
 from tqdm import tqdm
 from collections import OrderedDict
 
-# sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
-sys.path.append('D:\PowerTAC\TCS\mcts\pda_simulator')
+sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
+# sys.path.append('D:\PowerTAC\TCS\mcts\pda_simulator')
 from config import Config
 
 '''
@@ -36,7 +36,9 @@ class MCTS_Vanilla(gym.Env):
         self.render_mode = render_mode
         self.type = "Discrete MCTS"
 
-    def set(self, total_demand, number_of_bids=1, buy_limit_price_min=-100.0, buy_limit_price_max=-1.0, sell_limit_price_min=0.5, sell_limit_price_max=90.0, id='MCTS'):
+    # for discrete MCTS, buy_limit_price_max is set to be -10 as to use the values of both the limitprice fractions, 
+    # may help placing smaller yet effective bids
+    def set(self, total_demand, number_of_bids=1, buy_limit_price_min=-100.0, buy_limit_price_max=-10.0, sell_limit_price_min=0.5, sell_limit_price_max=90.0, id='MCTS'):
         self.id = id
         self.total_demand = total_demand 
         self.cleared_demand = 0
@@ -89,7 +91,6 @@ class MCTS_Vanilla(gym.Env):
         bids = list()
         # root = TreeNode()
         # self.root.hour_ahead_auction = proximity
-        # print('Vanilla MCTS called')
 
         if rem_quantity > 0.0:
             if not random:
@@ -220,6 +221,17 @@ class TreeNode:
             self.children.update({action: selected})
 
         return selected
+    
+
+    def select(self, mcts):
+
+        if len(self.children) < mcts.get_action_set().get_action_size():
+            action, next_state = self.random_select(mcts)             # action is the limitprice, next_state is the new TreeNode
+            self.children.update({action: next_state})
+        else:
+            next_state = self.uct_select(mcts) 
+
+        return next_state
     
     
     def step(self, limitprice, needed_mwh, list_of_sellers, list_of_buyers, pda):
@@ -426,7 +438,7 @@ class TreeNode:
         
         while self.is_leaf(rem_quantity) == False:
             
-            x_next = self.uct_select(mcts)
+            x_next = self.select(mcts)
             x_next_limitprice = mcts.get_limitprice(x_next.applied_action)
             r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(x_next_limitprice, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
             reward.append(r)
@@ -435,7 +447,7 @@ class TreeNode:
             self = x_next
 
         # expand  
-        x_next = self.uct_select(mcts)
+        x_next = self.select(mcts)
         x_next_limitprice = mcts.get_limitprice(x_next.applied_action)
         r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(x_next_limitprice, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
         reward.append(r)

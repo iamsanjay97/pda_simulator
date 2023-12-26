@@ -15,4 +15,4 @@ class Config:
         self.NUMBER_OF_ROLLOUTS = 500
         self.balancing_price = 90.0
         self.parallel = False                           # to place bids parallaly
-        self.iters = 500                                  # number of iterations for comparison
+        self.iters = 100                                  # number of iterations for comparison

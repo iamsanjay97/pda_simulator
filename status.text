@@ -1,4 +1,6 @@
 Parallel bid placing by different agent is not working as expected.
-MCTS-vanilla (version 1 and 2) needs to be debug to see whether they performing as expected.
-MCTS-SPW looks completely ready. Similar to alpha-zero, it also maintains a single Monte Carlo tree during an episode of the game (proximity 24 to 0). 
+
+Similar to alpha-zero, all MCTS variants maintain a single Monte Carlo tree during an episode of the game (proximity 24 to 0). 
+MCTS-Vanilla-V0 looks completely ready. Tested. Not planning to use V1, so didn't check.
+MCTS-SPW looks completely ready. Tested.
 MCTS-Cont_Regression looks completely ready and working as expected. Tested.

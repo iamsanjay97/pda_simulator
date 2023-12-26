@@ -24,7 +24,7 @@ Auction Handler contains:
 
 name_of_sellers = ['cp_genco']
 # name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
-name_of_buyers = ['MCTS-Cont-Reg', 'ZI']
+name_of_buyers = ['MCTS-Vanilla', 'MCTS-Cont-Reg']
 
 list_of_sellers = dict()
 list_of_buyers = dict()
@@ -47,9 +47,9 @@ for iter in range(config.iters):
 
     buyers = [None]*len(name_of_buyers)
         
-    buyers[0] = gym.make('MCTS_Cont_Regression-v0')
+    buyers[0] = gym.make('MCTS_Vanilla-v0')
     buyers[0].set(config.market_demand*0.5, 1, id=name_of_buyers[0])
-    buyers[1] = gym.make('ZI-v0')
+    buyers[1] = gym.make('MCTS_Cont_Regression-v0')
     buyers[1].set(config.market_demand*0.5, 1, id=name_of_buyers[1])
 
     # buyers[0] = gym.make('ZI-v0')

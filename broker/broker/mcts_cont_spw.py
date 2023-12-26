@@ -88,7 +88,6 @@ class MCTS_Cont_SPW(gym.Env):
         bids = list()
         # root = TreeNode()                 # keeping a same tree throughout 24 proxmities like alphaGo
         # self.root.hour_ahead_auction = proximity
-        # print('MCTS SPW called')
 
         if rem_quantity > 0.0:
             if not random:

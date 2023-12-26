@@ -194,6 +194,7 @@ class TreeNode:
     def random_select(self, mcts, proximity):
 
         lp = None
+        i = 0
         while True:
             lp = np.random.uniform(mcts.buy_limit_price_min, mcts.buy_limit_price_max)
             prob = self.get_p_cleared(proximity, lp, mcts.auction_data)
@@ -208,6 +209,11 @@ class TreeNode:
                 break
 
             if ((proximity > 0) and (proximity <= 6)) and ((prob > 0.75) and (prob <= 1.0)):
+                break
+
+            i += 1
+
+            if i > 100:
                 break
 
         node = TreeNode()
@@ -458,7 +464,7 @@ class TreeNode:
 
             x_next = self.select(mcts, self.hour_ahead_auction)
             prob = self.get_p_cleared(self.hour_ahead_auction, x_next.applied_action_lp, mcts.auction_data)
-            prob = 1 if (prob == -1 )else prob
+            prob = 1 if (prob == -1 ) else prob
             x_next.p_cleared = prob
             r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(mcts, x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
             reward.append(r)
