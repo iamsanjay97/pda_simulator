@@ -12,6 +12,7 @@ class Config:
         self.market_order_ask_price = 0
         self.DEFAULT_MCP = 50
         self.HOUR_AHEAD_AUCTIONS = 24
-        self.NUMBER_OF_ROLLOUTS = 100
+        self.NUMBER_OF_ROLLOUTS = 500
         self.balancing_price = 90.0
         self.parallel = False                           # to place bids parallaly
+        self.iters = 500                                  # number of iterations for comparison

@@ -104,8 +104,8 @@ class MCTS_Cont_Regression(gym.Env):
         if rem_quantity > 0.0:
             if not random:
                 for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
-                    mcts = copy.deepcopy(self)
-                    self.root.run_mcts(mcts, rem_quantity)
+                    # mcts = copy.deepcopy(self)        # TO DO: No need to create a copy, mcts is object is not modified in run_mcts CHECK THIS
+                    self.root.run_mcts(self, rem_quantity)
 
                 # parallelizing simulation using multiprocessing 
                 # with multiprocessing.Pool() as pool: 
@@ -167,10 +167,13 @@ class TreeNode:
         this_cleared = 0.0
 
         for item in data:
-            if lp > item:
+            if abs(lp) > item:
                 this_cleared += data[item]
             else:
                 break
+
+        if ((this_cleared == 0) or (this_cleared == total_cleared)) and len(auction_data[proximity]) < 5:
+            return -1
 
         if total_cleared != 0:
             return this_cleared/total_cleared
@@ -185,7 +188,7 @@ class TreeNode:
     # modified selection function
     # we check proximity of the auction, sample a limiprices and calculate their p_cleared
     # and pick the limitprice which is in the desirable range of p_cleared values
-    # proximity 24 to 17 -> p_cleared [0.10, 0.50]
+    # proximity 24 to 17 -> p_cleared [0.05, 0.50]
     # proximity 18 to 7 -> p_cleared [0.25, 0.75]
     # proximity 6 to 1 -> p_cleared [0.75, 1.0]
     def random_select(self, mcts, proximity):
@@ -198,10 +201,10 @@ class TreeNode:
             if prob == -1:
                 break
 
-            if ((proximity > 18) and (proximity <= 24)) and ((prob > 0.1) and (prob <= 0.5)):
+            if ((proximity > 18) and (proximity <= 24)) and ((prob > 0.05) and (prob <= 0.6)):
                 break
 
-            if ((proximity > 6) and (proximity <= 18)) and ((prob > 0.25) and (prob <= 0.75)):
+            if ((proximity > 6) and (proximity <= 18)) and ((prob > 0.25) and (prob <= 0.85)):
                 break
 
             if ((proximity > 0) and (proximity <= 6)) and ((prob > 0.75) and (prob <= 1.0)):
@@ -283,6 +286,8 @@ class TreeNode:
 
         # market clearing
         mcp, mcq, cleared_asks_df, cleared_bids_df, last_uncleared_ask = pda.clearing_mechanism(asks_df, bids_df)
+        if mcts.type == 'Continuous MCTS Regression':
+            mcts.update_auction_data(auction_proximity, mcp, mcq)
 
         # update the cleared quantity of sellers
         for seller in list_of_sellers.keys():
@@ -349,6 +354,9 @@ class TreeNode:
                         
             # market clearing
             mcp, mcq, cleared_asks_df, cleared_bids_df, last_uncleared_ask = pda.clearing_mechanism(asks_df, bids_df)
+            if mcts.type == 'Continuous MCTS Regression':
+                mcts.update_auction_data(proximity, mcp, mcq)
+
             mcts_cleared_quantity = 0
 
             # update the cleared quantity of sellers
@@ -450,6 +458,7 @@ class TreeNode:
 
             x_next = self.select(mcts, self.hour_ahead_auction)
             prob = self.get_p_cleared(self.hour_ahead_auction, x_next.applied_action_lp, mcts.auction_data)
+            prob = 1 if (prob == -1 )else prob
             x_next.p_cleared = prob
             r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(mcts, x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
             reward.append(r)
@@ -460,6 +469,7 @@ class TreeNode:
         # expand  
         x_next = self.select(mcts, self.hour_ahead_auction)
         prob = self.get_p_cleared(self.hour_ahead_auction, x_next.applied_action_lp, mcts.auction_data)
+        prob = 1 if (prob == -1 )else prob
         x_next.p_cleared = prob
         r, q, rem_quantity, list_of_sellers, list_of_buyers = self.step(mcts, x_next.applied_action_lp, rem_quantity, list_of_sellers, list_of_buyers, pda) # do a single auction
         reward.append(r)
