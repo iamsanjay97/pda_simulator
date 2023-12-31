@@ -201,7 +201,7 @@ class TreeNode:
 
         # occasionally generate small random asks
         if (auction_proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
-            random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+            random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/20.0 + np.random.random()*0.4*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
             asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
             asks_df = asks_df.sort_values(by=['Price'])
 
@@ -269,7 +269,7 @@ class TreeNode:
 
             # occasionally generate small random asks
             if (auction_proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
-                random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+                random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/20.0 + np.random.random()*0.4*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
                 asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
                 asks_df = asks_df.sort_values(by=['Price'])
 

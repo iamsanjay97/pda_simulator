@@ -24,7 +24,7 @@ Auction Handler contains:
 
 name_of_sellers = ['cp_genco']
 # name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
-name_of_buyers = ['MCTS-Vanilla', 'MCTS-Cont-Reg']
+name_of_buyers = ['MCTS-Vanilla', 'ZI']
 
 list_of_sellers = dict()
 list_of_buyers = dict()
@@ -49,7 +49,7 @@ for iter in range(config.iters):
         
     buyers[0] = gym.make('MCTS_Vanilla-v0')
     buyers[0].set(config.market_demand*0.5, 1, id=name_of_buyers[0])
-    buyers[1] = gym.make('MCTS_Cont_Regression-v0')
+    buyers[1] = gym.make('ZI-v0')
     buyers[1].set(config.market_demand*0.5, 1, id=name_of_buyers[1])
 
     # buyers[0] = gym.make('ZI-v0')
@@ -102,7 +102,7 @@ for iter in range(config.iters):
 
         # occasionally generate small random asks
         if (proximity != config.HOUR_AHEAD_AUCTIONS) and (np.random.random() < 0.33):
-            random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/10.0 + np.random.random()*0.7*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
+            random_asks = pd.DataFrame([["miso", config.DEFAULT_MCP/20.0 + np.random.random()*0.4*config.DEFAULT_MCP, -np.random.normal(15, 1)]], columns=['ID', 'Price', 'Quantity'])
             asks_df = pd.concat([asks_df, random_asks], ignore_index=True)
             asks_df = asks_df.sort_values(by=['Price'])
         # print(asks_df)
