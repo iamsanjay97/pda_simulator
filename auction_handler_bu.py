@@ -23,22 +23,21 @@ Auction Handler contains:
 
 # --------------------------------- Update this based on Configuration --------------------------------------- #
 
-# list_of_costs = dict()
+name_of_sellers = ['cp_genco']
+# name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
+name_of_buyers = ['MCTS_Cont']
 
-# for item in name_of_buyers:
-#     list_of_costs.update({item: {0: 0}})
+list_of_sellers = dict()
+list_of_buyers = dict()
+list_of_costs = dict()
+
+for item in name_of_buyers:
+    list_of_costs.update({item: {0: 0}})
 
 config = Config()
 pda = gym.make('pdauction/Auctioneer-v0')
 
-def auction(iter):
-
-    name_of_sellers = ['cp_genco']
-    # name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
-    name_of_buyers = ['MCTS_Cont']
-
-    list_of_sellers = dict()
-    list_of_buyers = dict()
+for iter in range(config.iters):
 
     per_buyer_cost = dict()
 
@@ -194,23 +193,13 @@ def auction(iter):
         per_buyer_cost[buyer] = temp / list_of_buyers[buyer].total_demand
 
     print()
-    # for item in name_of_buyers:
-    #     temp_dict = list_of_costs[item]
-    #     cur_cost = per_buyer_cost[item]
-    #     avg_cost = (list(temp_dict.keys())[0]*list(temp_dict.values())[0] + cur_cost) / (list(temp_dict.keys())[0]+1)
-    #     temp_dict = {list(temp_dict.keys())[0]+1: avg_cost}
-    #     list_of_costs[item] = temp_dict
+    for item in name_of_buyers:
+        temp_dict = list_of_costs[item]
+        cur_cost = per_buyer_cost[item]
+        avg_cost = (list(temp_dict.keys())[0]*list(temp_dict.values())[0] + cur_cost) / (list(temp_dict.keys())[0]+1)
+        temp_dict = {list(temp_dict.keys())[0]+1: avg_cost}
+        list_of_costs[item] = temp_dict
 
-    # print('\n---------- Comparing Average Clearing Price after {} Iterations ------\n'.format(iter+1))
-    # for item in name_of_buyers:
-    #     print(item, list(list_of_costs[item].values())[0])
-
-    return per_buyer_cost
-
-
-iters = list(range(1, 1001))
- 
-with multiprocessing.Pool() as pool: 
-    results = pool.map(auction, iters) 
-
-print(results)
+    print('\n---------- Comparing Average Clearing Price after {} Iterations ------\n'.format(iter+1))
+    for item in name_of_buyers:
+        print(item, list(list_of_costs[item].values())[0])

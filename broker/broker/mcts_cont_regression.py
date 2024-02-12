@@ -15,7 +15,7 @@ from tqdm import tqdm
 from sortedcontainers import SortedDict
 
 # sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator')
-sys.path.append('D:\PowerTAC\TCS\mcts\pda_simulator')
+# sys.path.append('D:\PowerTAC\TCS\mcts\pda_simulator')
 from config import Config
 
 '''
@@ -154,7 +154,7 @@ class TreeNode:
         self.p_cleared = 0.0  # clearing probability for the applied_action_lp
         
     
-    # this gets updates within simulation using actual auction data, but for limitprices 
+    # this gets updated within simulation using actual auction data, but for limitprices 
     # placed during the simulation phase
     def get_p_cleared(self, proximity, lp, auction_data):
 
@@ -453,12 +453,12 @@ class TreeNode:
         buyer1 = gym.make('MCTS_Cont_Regression-v0')
         buyer1.set(mcts.quantities[name_of_buyers[0]], 1, id=name_of_buyers[0])
         buyer1.set_cleared_demand(mcts.demand[name_of_buyers[0]])
-        buyer2 = gym.make('ZI-v0')
-        buyer2.set(mcts.quantities[name_of_buyers[1]], 1, id=name_of_buyers[1])
-        buyer2.set_cleared_demand(mcts.demand[name_of_buyers[1]])
+        # buyer2 = gym.make('ZI-v0')
+        # buyer2.set(mcts.quantities[name_of_buyers[1]], 1, id=name_of_buyers[1])
+        # buyer2.set_cleared_demand(mcts.demand[name_of_buyers[1]])
 
         list_of_buyers.update({name_of_buyers[0]: buyer1})
-        list_of_buyers.update({name_of_buyers[1]: buyer2})
+        # list_of_buyers.update({name_of_buyers[1]: buyer2})
 
         while self.is_leaf(rem_quantity) == False:
 

@@ -51,7 +51,7 @@ class AuctioneerEnv(gym.Env):
         mcp = 40.0                                    # default macp when both ask and bid are market order                      
         cleared_asks = list()
         cleared_bids = list()
-        last_uncleared_ask = 0.0
+        last_uncleared_ask = asks_df[:1].values[0][1] 
 
         i = 0
 
