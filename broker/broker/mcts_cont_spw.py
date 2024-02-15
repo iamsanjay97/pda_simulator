@@ -91,7 +91,8 @@ class MCTS_Cont_SPW(gym.Env):
 
         if rem_quantity > 0.0:
             if not random:
-                for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
+                # for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
+                for i in range(config.NUMBER_OF_ROLLOUTS): 
                     mcts = copy.deepcopy(self)
                     self.root.run_mcts(mcts, rem_quantity)
 
@@ -102,7 +103,7 @@ class MCTS_Cont_SPW(gym.Env):
 
                 self.root = self.root.best_action()
                 best_limitprice = self.root.applied_action_lp           # limitprice is negative
-                print("\nBest Move: ", best_limitprice)
+                # print("\nBest Move: ", best_limitprice)
             else:
                 best_limitprice = self.root.default_policy(self)      # limitprice is negative
 

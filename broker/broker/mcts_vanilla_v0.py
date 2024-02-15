@@ -94,13 +94,14 @@ class MCTS_Vanilla(gym.Env):
 
         if rem_quantity > 0.0:
             if not random:
-                for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
+                # for i in tqdm(range(config.NUMBER_OF_ROLLOUTS)): 
+                for i in range(config.NUMBER_OF_ROLLOUTS): 
                     mcts = copy.deepcopy(self)
                     self.root.run_mcts(mcts, rem_quantity)
 
                 best_move = self.root.best_action()
                 self.root = best_move
-                print("\nBest Move: ", best_move.to_string())
+                # print("\nBest Move: ", best_move.to_string())
             else:
                 best_move = self.root.default_policy(self)
 
