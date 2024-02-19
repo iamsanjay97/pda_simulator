@@ -21,14 +21,6 @@ class Observer:
         self.MEAN2017 = 39.50736
         self.STDDEV = self.STDDEV2016
 
-        try:
-            with io.open("activeWholesalePredictorModel.txt", "r") as file:
-                predictor_version = file.readline().strip()
-                self.STDDEV = float(file.readline().strip())
-        except Exception as e:
-            print("Unable to read stddev value:", e)
-            self.STDDEV = self.STDDEV2016
-
     def set_time(self, day, hour, hour_ahead, current_time_slot):
         self.day = day
         self.hour = hour

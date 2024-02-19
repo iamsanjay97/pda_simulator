@@ -22,6 +22,7 @@ class MCTS(object):
         self.player_name = "MCTS"
         self.STDDEV2015 = 21.0
         self.MEANSTDDEV2015 = 6.5
+        print('MCTS Initiated')
 
     def setup(self):
         self.actionset_type = 2.0
@@ -266,7 +267,7 @@ class MCTS(object):
 
     def get_best_mcts_move(self, observer):
         arr_counter_higher_bids = [None] * 25
-        root = TreeNode()
+        root = self.TreeNode()
         root.hour_ahead_auction = observer.hour_ahead + 1
         for j in range(observer.hour_ahead + 1):
             self.arr_mcts_pred_clearing_price[j] = observer.arr_clearing_prices[j]
@@ -298,14 +299,35 @@ class MCTS(object):
         return random_gauss / 100.0
     
 
-class TreeNode(object):
+class TreeNode:
 
     r = random.Random()
     epsilon = 1e-6
-    children = []  # List for children nodes
+    
+    # n_visit, hour_ahead_auction
 
     def __init__(self, nobid: bool):
         self.nobid = nobid
+        print('Treenode Initiated ... nobid')
+
+    def __init__(self):
+        self.n_visits = 0
+        self.tot_value = 0
+        self.current_node_cost_avg = 0
+        self.current_node_cost_last = 0
+        self.minmcts_clearing_price = 0
+        self.maxmcts_clearing_price = 0
+        self.min_mult = 0
+        self.max_mult = 0
+        self.hour_ahead_auction = 24
+        self.applied_action = 0
+        self.nobid = True
+        self.action_type = None
+        self.vol_percentage = 0
+        self.action_name = None
+        self.balancing_price = 200
+        self.children = []  # List for children nodes
+        print('Treenode Initiated ... default')
 
     def __init__(self, tn):
         self.n_visits = tn.n_visits
@@ -322,6 +344,9 @@ class TreeNode(object):
         self.action_type = tn.action_type
         self.vol_percentage = tn.vol_percentage
         self.action_name = tn.action_name
+        self.balancing_price = 200
+        self.children = []  # List for children nodes
+        print('Tree Initiated ... parameterised')
 
     
     def unvisited_children(self, tn):
@@ -353,7 +378,6 @@ class TreeNode(object):
                 visited.append(cur)
 
                 ret_value = self.rollout(cur, mcts.arr_mcts_pred_clearing_price, ob, needed_energy, ini_needed_energy, actions, mcts) 
-
                 needed_energy -= ret_value[0] 
                 sim_cost += -1.0 * ret_value[1]
                 break
@@ -366,7 +390,8 @@ class TreeNode(object):
 
             visited.append(cur)
 
-        bprice = ob.market_manager.get_balancing_price(-1.0 * needed_energy)
+        # bprice = ob.market_manager.get_balancing_price(-1.0 * needed_energy)
+        bprice = self.balancing_price
 
         balancing_sim_cost = abs(needed_energy) * bprice
         sim_cost += balancing_sim_cost
@@ -413,7 +438,8 @@ class TreeNode(object):
             for child in self.children:
                 totl_point = child.tot_value
 
-                dividend = ob.market_manager.get_balancing_price(-1.0 * ob.initial_needed_energy_mcts_broker) * abs(ob.initial_needed_energy_mcts_broker)  # Replace with actual attribute access
+                # dividend = ob.market_manager.get_balancing_price(-1.0 * ob.initial_needed_energy_mcts_broker) * abs(ob.initial_needed_energy_mcts_broker)  # Replace with actual attribute access
+                dividend = self.balancing_price
                 temp_t = totl_point
                 totl_point = 1.0 - totl_point / dividend
 
@@ -423,15 +449,15 @@ class TreeNode(object):
                 uct_value = totl_point + visit_point + rand_point
                 if print_on:
                     print(f"Action {child.applied_action} UCT value = {uct_value} totlPoint {totl_point} nvisitPoint {visit_point} c.nvisits {child.n_visits} totalVisits {self.n_visits}")
-                if totl_point > best_value:
+                if uct_value > best_value:
                     selected = child
-                    best_value = totl_point
+                    best_value = uct_value
                     if print_on:
                         print(" [best] ")
                 elif print_on:
                     print("")
-        except Exception as ex:
-            ex.printStackTrace()
+        except Exception as e:
+            print(e)
 
         return selected
     
@@ -458,7 +484,8 @@ class TreeNode(object):
                 n_visit_value = child.n_visits if child.n_visits > 0 else 1.0 + TreeNode.epsilon
                 totl_point = child.tot_value
 
-                dividend = ob.market_manager.get_balancing_price(-1.0 * ob.initial_needed_energy_mcts_broker) * abs(ob.initial_needed_energy_mcts_broker)
+                # dividend = ob.market_manager.get_balancing_price(-1.0 * ob.initial_needed_energy_mcts_broker) * abs(ob.initial_needed_energy_mcts_broker)
+                dividend = self.balancing_price
                 totl_point = 1.0 - totl_point / dividend
 
                 visit_point = math.sqrt(2.0 * math.log(self.n_visits + 1.0) / n_visit_value)
@@ -482,6 +509,7 @@ class TreeNode(object):
     
 
     def rollout(self, temp_node, arr_pred_clearing_price, ob, needed_mwh, ini_needed_energy, actions, mcts) -> tuple[float, float]:
+        print('Inside rollout')
         tn = TreeNode(temp_node)  # Create a copy of the node
 
         total_bid_volume = 0.0
@@ -512,11 +540,10 @@ class TreeNode(object):
                     surplus = - needed_mwh
                     min_mwh = abs(ini_needed_energy) * (1.0 - tn.vol_percentage)
                     min_mwh = max(min_mwh, surplus)
-                    bprice = abs(ob.market_manager.get_balancing_price(min_mwh))  # Replace with actual method call
-                    bpriceerr = ob.market_manager.get_mvn_avg_bal_err()  # Replace with actual method name
-                    bprice += bpriceerr / 2.0 if bpriceerr > 0.0 else -bpriceerr * 2.0
+                    # bprice = abs(ob.market_manager.get_balancing_price(min_mwh))  # Replace with actual method call
+                    bprice = self.balancing_price
                     min_mwh /= number_of_bids
-                    for i in range(1, int(number_of_bids) + 1):
+                    for i in range(1, number_of_bids + 1):
                         if bprice <= clearing_price:
                             cost_value -= min_mwh * clearing_price
                             total_bid_volume -= min_mwh
@@ -562,9 +589,8 @@ class TreeNode(object):
                 surplus = - needed_mwh
                 min_mwh = abs(ini_needed_energy) * (1.0 - self.vol_percentage)
                 min_mwh = max(min_mwh, surplus)
-                bprice = abs(ob.market_manager.get_balancing_price(min_mwh)) 
-                bpriceerr = ob.market_manager.get_mvn_avg_bal_err() 
-                bprice += bpriceerr / 2.0 if bpriceerr > 0.0 else -bpriceerr * 2.0
+                # bprice = abs(ob.market_manager.get_balancing_price(min_mwh)) 
+                bprice = self.balancing_price
                 min_mwh /= number_of_bids
                 for i in range(1, int(number_of_bids) + 1):
                     if bprice <= clearing_price:
@@ -646,14 +672,6 @@ class Observer:
         self.STDDEV2017 = 17.68961
         self.MEAN2017 = 39.50736
         self.STDDEV = self.STDDEV2016
-
-        try:
-            with io.open("activeWholesalePredictorModel.txt", "r") as file:
-                predictor_version = file.readline().strip()
-                self.STDDEV = float(file.readline().strip())
-        except Exception as e:
-            print("Unable to read stddev value:", e)
-            self.STDDEV = self.STDDEV2016
 
     def set_time(self, day, hour, hour_ahead, current_time_slot):
         self.day = day

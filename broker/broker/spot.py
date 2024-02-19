@@ -31,6 +31,7 @@ class SPOT(gym.Env):
         self.action_space = spaces.Box(-100.0, -10.0, shape=(1,), dtype=float)
         self.render_mode = render_mode
         self.type = "SPOT"
+        self.balancing_price = 200.0
         self.mcts = MCTS()
         self.observer = Observer()
 
@@ -84,16 +85,21 @@ class SPOT(gym.Env):
             if abs(rem_quantity) <= self.server_min_mwh:
                 return
 
-            market_limit_price = self.market_clearing_price_prediction.get(Integer.valueOf(days))
-            moving_avg_err = self.observer.market_manager.get_mvn_avg_err()
-            
+            # TO DO: Check what to do for the predictor
+            try:
+                market_limit_price = self.market_clearing_price_prediction.get(days)
+            except:
+                market_limit_price = None
+                     
             for haid in range(24):
                 predicted_clearing_price_per_auction = 30.0
                 
                 if market_limit_price != None:                
                     if (market_limit_price.predicted_clearing_price_per_auction[hour][haid] != 0.0):
                         predicted_clearing_price_per_auction = market_limit_price.predicted_clearing_price_per_auction[hour][haid]
-                self.observer.arr_clearing_prices[haid] = predicted_clearing_price_per_auction - moving_avg_err
+                else:
+                    predicted_clearing_price_per_auction = 100.0   # Fixed value as no price predictor
+                self.observer.arr_clearing_prices[haid] = predicted_clearing_price_per_auction
 
             best_move = self.mcts.get_best_mcts_move(self.observer)
 
@@ -129,13 +135,7 @@ class SPOT(gym.Env):
                     if min_mwh < surplus:
                         min_mwh = surplus
         
-                    bprice = abs(self.observer.marketManager.getBalancingPrice(min_mwh))
-                    bpriceerr = self.observer.marketManager.getMvnAvgBALErr()
-
-                    if bpriceerr > 0.0:
-                        bprice += bpriceerr / 2.0
-                    else:                       
-                        bprice -= bpriceerr * 2.0
+                    bprice = self.balancing_price
                     
                     min_mwh /= number_of_bids
                     

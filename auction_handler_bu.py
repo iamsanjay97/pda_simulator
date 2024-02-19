@@ -1,4 +1,5 @@
 import sys
+import time
 import gym
 import math
 import numpy as np
@@ -23,21 +24,25 @@ Auction Handler contains:
 
 # --------------------------------- Update this based on Configuration --------------------------------------- #
 
-name_of_sellers = ['cp_genco']
-# name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
-name_of_buyers = ['MCTS_Cont']
-
-list_of_sellers = dict()
-list_of_buyers = dict()
-list_of_costs = dict()
-
-for item in name_of_buyers:
-    list_of_costs.update({item: {0: 0}})
-
 config = Config()
 pda = gym.make('pdauction/Auctioneer-v0')
 
+start = time.time()
+
 for iter in range(config.iters):
+
+    name_of_sellers = ['cp_genco']
+    # name_of_buyers = ['MCTS_Cont', 'MCTS_Vanilla', 'ZI']
+    name_of_buyers = ['MCTS_Cont', 'SPOT']
+
+    list_of_sellers = dict()
+    list_of_buyers = dict()
+    list_of_costs = dict()
+
+    for item in name_of_buyers:
+        list_of_costs.update({item: {0: 0}})
+
+    config = Config()
 
     per_buyer_cost = dict()
 
@@ -49,7 +54,9 @@ for iter in range(config.iters):
     buyers = [None]*len(name_of_buyers)
         
     buyers[0] = gym.make('MCTS_Cont_Regression-v0')
-    buyers[0].set(config.market_demand*1.0, 1, id=name_of_buyers[0])
+    buyers[0].set(config.market_demand*0.5, 1, id=name_of_buyers[0])
+    buyers[1] = gym.make('SPOT-v0')
+    buyers[1].set(config.market_demand*0.5, 1, id=name_of_buyers[1])
 
     # buyers[0] = gym.make('ZI-v0')
     # buyers[0].set(config.market_demand*0.34, 1, id=name_of_buyers[0])
@@ -112,8 +119,8 @@ for iter in range(config.iters):
         else:
             bids_df = pd.DataFrame(columns=['ID', 'Price', 'Quantity'])
 
-        for buyer in list_of_buyers.keys():
-            print("Original Requirement of ", list_of_buyers[buyer].id, ": ", (list_of_buyers[buyer].total_demand - list_of_buyers[buyer].cleared_demand))
+        # for buyer in list_of_buyers.keys():
+        #     print("Original Requirement of ", list_of_buyers[buyer].id, ": ", (list_of_buyers[buyer].total_demand - list_of_buyers[buyer].cleared_demand))
 
         if config.parallel == True:       # debug this
             # parallelizing simulation using multiprocessing 
@@ -141,7 +148,7 @@ for iter in range(config.iters):
                 buyer_df = pd.DataFrame(list_of_buyers[buyer].bids(rounds, cur_round), columns=['ID', 'Price', 'Quantity'])
                 bids_df = pd.concat([bids_df,buyer_df], ignore_index=True)
             bids_df = bids_df.sort_values(by=['Price'])
-            # print(bids_df)
+            print(bids_df)
                     
         # market clearing
         mcp, mcq, cleared_asks_df, cleared_bids_df, last_uncleared_ask = pda.clearing_mechanism(asks_df, bids_df)
@@ -178,21 +185,21 @@ for iter in range(config.iters):
                 buyer.update_buy_limit_price_max(-last_uncleared_ask)
         
         print('\n----------From Handler: At Proxomity ', proximity, '------\n')
-        # print('MCP', mcp)
-        # print('MCQ', mcq)
-        # print()
+        print('MCP', mcp)
+        print('MCQ', mcq)
+        print()
         
         cur_round += 1
 
-    print('\n---------- Remaining Quantity of Brokers (To be Bought at Balancing Price) ------\n')
+    # print('\n---------- Remaining Quantity of Brokers (To be Bought at Balancing Price) ------\n')
     for buyer in list_of_buyers.keys():
-        print(buyer, str(list_of_buyers[buyer].total_demand - list_of_buyers[buyer].cleared_demand))
+        # print(buyer, str(list_of_buyers[buyer].total_demand - list_of_buyers[buyer].cleared_demand))
 
         temp = per_buyer_cost[buyer]
         temp += (150.0)*(list_of_buyers[buyer].total_demand - list_of_buyers[buyer].cleared_demand)
         per_buyer_cost[buyer] = temp / list_of_buyers[buyer].total_demand
 
-    print()
+    # print()
     for item in name_of_buyers:
         temp_dict = list_of_costs[item]
         cur_cost = per_buyer_cost[item]
@@ -200,6 +207,11 @@ for iter in range(config.iters):
         temp_dict = {list(temp_dict.keys())[0]+1: avg_cost}
         list_of_costs[item] = temp_dict
 
-    print('\n---------- Comparing Average Clearing Price after {} Iterations ------\n'.format(iter+1))
+    # print('\n---------- Comparing Average Clearing Price after {} Iterations ------\n'.format(iter+1))
     for item in name_of_buyers:
-        print(item, list(list_of_costs[item].values())[0])
+        if iter+1 == config.iters:
+            print(item, list(list_of_costs[item].values())[0])
+
+end = time.time()
+
+print('#Iterations: {}, Total time taken: {}'.format(config.iters, (end-start)))
