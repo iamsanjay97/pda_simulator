@@ -4,7 +4,7 @@ import math
 import random
 import time
 
-class MCTS(object):
+class MCTS:
 
     def __init__(self):
         self.root = None
@@ -22,6 +22,7 @@ class MCTS(object):
         self.player_name = "MCTS"
         self.STDDEV2015 = 21.0
         self.MEANSTDDEV2015 = 6.5
+        self.root = TreeNode()
         print('MCTS Initiated')
 
     def setup(self):
@@ -267,25 +268,24 @@ class MCTS(object):
 
     def get_best_mcts_move(self, observer):
         arr_counter_higher_bids = [None] * 25
-        root = self.TreeNode()
-        root.hour_ahead_auction = observer.hour_ahead + 1
+        self.root.hour_ahead_auction = observer.hour_ahead + 1
         for j in range(observer.hour_ahead + 1):
             self.arr_mcts_pred_clearing_price[j] = observer.arr_clearing_prices[j]
             arr_counter_higher_bids[j] = 0
 
-        root.minmcts_clearing_price = self.arr_mcts_pred_clearing_price[observer.hour_ahead]
+        self.root.minmcts_clearing_price = self.arr_mcts_pred_clearing_price[observer.hour_ahead]
         start_time = time.time()
         i = 0
 
         while True:
-            root.runMonteCarlo(self.actions, self, observer)
+            self.root.runMonteCarlo(self.actions, self, observer)
             end_time = time.time()
             elapsed_time = end_time - start_time
             if elapsed_time > 0.125:
                 break
             i += 1
         
-        return root.final_select(observer)
+        return self.root.final_select(observer)
     
 
     def rand_error(self, error_rate):
@@ -329,24 +329,25 @@ class TreeNode:
         self.children = []  # List for children nodes
         print('Treenode Initiated ... default')
 
-    def __init__(self, tn):
-        self.n_visits = tn.n_visits
-        self.tot_value = tn.tot_value
-        self.current_node_cost_avg = tn.current_node_cost_avg
-        self.current_node_cost_last = tn.current_node_cost_last
-        self.minmcts_clearing_price = tn.minmcts_clearing_price
-        self.maxmcts_clearing_price = tn.maxmcts_clearing_price
-        self.min_mult = tn.min_mult
-        self.max_mult = tn.max_mult
-        self.hour_ahead_auction = tn.hour_ahead_auction
-        self.applied_action = tn.applied_action
-        self.nobid = tn.nobid
-        self.action_type = tn.action_type
-        self.vol_percentage = tn.vol_percentage
-        self.action_name = tn.action_name
-        self.balancing_price = 200
-        self.children = []  # List for children nodes
-        print('Tree Initiated ... parameterised')
+    def set(self, tn):
+        node = self.TreeNode()
+        node.n_visits = tn.n_visits
+        node.tot_value = tn.tot_value
+        node.current_node_cost_avg = tn.current_node_cost_avg
+        node.current_node_cost_last = tn.current_node_cost_last
+        node.minmcts_clearing_price = tn.minmcts_clearing_price
+        node.maxmcts_clearing_price = tn.maxmcts_clearing_price
+        node.min_mult = tn.min_mult
+        node.max_mult = tn.max_mult
+        node.hour_ahead_auction = tn.hour_ahead_auction
+        node.applied_action = tn.applied_action
+        node.nobid = tn.nobid
+        node.action_type = tn.action_type
+        node.vol_percentage = tn.vol_percentage
+        node.action_name = tn.action_name
+        node.balancing_price = 200
+        node.children = []  # List for children nodes
+        return node
 
     
     def unvisited_children(self, tn):
@@ -361,7 +362,7 @@ class TreeNode:
         sim_cost = 0.0
         needed_energy = ob.needed_energy_per_broker 
         ini_needed_energy = ob.initial_needed_energy_mcts_broker 
-        visited: list[TreeNode] = []
+        visited = []
         cur = self
 
         visited.append(self)
@@ -411,7 +412,9 @@ class TreeNode:
         self.children = [None] * n_actions 
         new_hour_ahead_auction = self.hour_ahead_auction - 1
         for i in range(n_actions):
-            self.children[i] = TreeNode()
+            print('Before')
+            self.children[i] = self.TreeNode()
+            print('After')
             self.children[i].hour_ahead_auction = new_hour_ahead_auction
 
             mean = ob.arr_clearing_prices[new_hour_ahead_auction] 
@@ -443,9 +446,9 @@ class TreeNode:
                 temp_t = totl_point
                 totl_point = 1.0 - totl_point / dividend
 
-                visit_point = math.sqrt(2.0 * math.log(self.n_visits + 1.0) / (child.n_visits + TreeNode.epsilon))
+                visit_point = math.sqrt(2.0 * math.log(self.n_visits + 1.0) / (child.n_visits + self.epsilon))
 
-                rand_point = TreeNode.r.random() * TreeNode.epsilon
+                rand_point = self.r.random() * self.epsilon
                 uct_value = totl_point + visit_point + rand_point
                 if print_on:
                     print(f"Action {child.applied_action} UCT value = {uct_value} totlPoint {totl_point} nvisitPoint {visit_point} c.nvisits {child.n_visits} totalVisits {self.n_visits}")
@@ -481,7 +484,7 @@ class TreeNode:
                 if child.nobid:
                     selected = child
             else:
-                n_visit_value = child.n_visits if child.n_visits > 0 else 1.0 + TreeNode.epsilon
+                n_visit_value = child.n_visits if child.n_visits > 0 else 1.0 + self.epsilon
                 totl_point = child.tot_value
 
                 # dividend = ob.market_manager.get_balancing_price(-1.0 * ob.initial_needed_energy_mcts_broker) * abs(ob.initial_needed_energy_mcts_broker)
@@ -490,7 +493,7 @@ class TreeNode:
 
                 visit_point = math.sqrt(2.0 * math.log(self.n_visits + 1.0) / n_visit_value)
 
-                rand_point = TreeNode.r.random() * TreeNode.epsilon
+                rand_point = self.r.random() * self.epsilon
                 uct_value = totl_point + visit_point + rand_point
                 if print_on:
                     print(f"Action {child.applied_action} UCT value = {uct_value} totlPoint {totl_point} nvisitPoint {visit_point} c.nvisits {child.n_visits} totalVisits {self.n_visits}")
@@ -508,9 +511,9 @@ class TreeNode:
         return self.hour_ahead_auction == 0
     
 
-    def rollout(self, temp_node, arr_pred_clearing_price, ob, needed_mwh, ini_needed_energy, actions, mcts) -> tuple[float, float]:
+    def rollout(self, temp_node, arr_pred_clearing_price, ob, needed_mwh, ini_needed_energy, actions, mcts):
         print('Inside rollout')
-        tn = TreeNode(temp_node)  # Create a copy of the node
+        tn = self.set(temp_node)  # Create a copy of the node
 
         total_bid_volume = 0.0
         cost_value = 0.0
@@ -562,7 +565,7 @@ class TreeNode:
         return total_bid_volume, cost_value
     
 
-    def simulation(self, arr_pred_clearing_price, ob, needed_mwh, ini_needed_energy) -> tuple[float, float]:
+    def simulation(self, arr_pred_clearing_price, ob, needed_mwh, ini_needed_energy):
         total_bid_volume = 0.0
         cost_value = 0.0
 
@@ -620,7 +623,7 @@ class TreeNode:
         return self.get_children(hour_ahead, count + 1)
     
 
-class Action(object):
+class Action:
     """Represents an action with adjustable price calculation."""
 
     def __init__(self, action_name, min_mult, max_mult, no_bid, action_type, percentage):
@@ -632,7 +635,7 @@ class Action(object):
         self.type = action_type
         self.percentage = percentage
 
-    def get_adjusted_price(self, mean_price, stddev) -> tuple[float, float]:
+    def get_adjusted_price(self, mean_price, stddev):
         """Calculates and returns the adjusted price range."""
         min_price = mean_price + self.min_mult * stddev
         max_price = mean_price + self.max_mult * stddev

@@ -8,7 +8,7 @@ import pandas as pd
 from gym import spaces
 from config import Config
 
-sys.path.append('/home/sanjay/Research/MCTS/Codes/pda_simulator/broker/broker/spot')
+sys.path.append('/mnt/d/PowerTAC/TCS/mcts_thread/pda_simulator/broker/broker/spot')
 from mcts import MCTS, Action, ACTION_TYPE, Observer
 
 config = Config()

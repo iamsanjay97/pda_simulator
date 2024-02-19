@@ -12,7 +12,7 @@ class Config:
         self.market_order_ask_price = 0
         self.DEFAULT_MCP = 80
         self.HOUR_AHEAD_AUCTIONS = 24
-        self.NUMBER_OF_ROLLOUTS = 50
+        self.NUMBER_OF_ROLLOUTS = 100
         self.balancing_price = 90.0
         self.parallel = False                           # to place bids parallaly
         self.iters = 2                                # number of iterations for comparison
@@ -23,6 +23,3 @@ class Config:
         self.balancing_price_record_max = 200.0         # self.balancing_price
         self.quantity_record_min = 0              
         self.quantity_record_max = self.market_demand
-
-# Demand Levels: Low, Medium, High, Extreme
-# MWh          : 100, 200, 300, 400
